@@ -18,10 +18,9 @@ RUN dnf5 -y swap kernel kernel-surface \
     dnf5 -y install \
     iptsd \
     libwacom-surface \
-    surface-secureboot && \
     dnf5 clean all
 
-# Enable the Intel Precise Touch & Stylus daemon
+# Enable the Intel Precise Touch & Stylus daemon for touch and pen support
 RUN systemctl enable iptsd.service
 
 # Regenerate initramfs for the newly installed Surface kernel
