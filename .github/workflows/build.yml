@@ -1,3 +1,4 @@
+#Aurora Image build using the Linux Surface kernel for Surface Go 2
 name: Build Aurora Surface Image
 
 on:
