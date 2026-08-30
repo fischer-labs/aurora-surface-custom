@@ -38,7 +38,7 @@ RUN dnf5 -y install --allowerasing \
       kernel-surface-modules-core kernel-surface-modules-extra && \
     STOCK="$(rpm -qa 'kernel' 'kernel-core' 'kernel-modules' 'kernel-modules-core' 'kernel-modules-extra')" && \
     if [ -n "$STOCK" ]; then dnf5 -y remove --no-autoremove $STOCK; fi && \
-    dnf5 -y install iptsd libwacom-surface && \
+    dnf5 -y install --allowerasing iptsd libwacom-surface && \
     dnf5 clean all
 
 # Fail the build if we did not end up on the surface kernel, and print the
