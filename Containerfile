@@ -56,7 +56,16 @@ RUN rpm -q kernel-surface >/dev/null || { echo "ERROR: kernel-surface not instal
 
 # Regenerate the initramfs for the surface kernel. Use --no-hostonly so the
 # image is portable (the build host is not the target hardware).
+# dracut logs non-fatal errors on this ostree base (missing /dev/log, and /root
+# is a dangling symlink), so exit 0 alone does not prove the initramfs is good.
+# The build therefore checks the output directly: it must exist, be non-empty,
+# and contain the Surface System Aggregator driver needed at early boot.
 RUN KERNEL_VERSION="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}\n' kernel-surface | tail -n 1)" && \
+    IMG="/usr/lib/modules/${KERNEL_VERSION}/initramfs.img" && \
     dracut --kver "${KERNEL_VERSION}" --force --no-hostonly \
       --add-drivers "surface_aggregator surface_aggregator_registry surface_hid" \
-      "/usr/lib/modules/${KERNEL_VERSION}/initramfs.img"
+      "$IMG" && \
+    test -s "$IMG" && \
+    echo ">>> initramfs built: $(du -h "$IMG" | cut -f1) at $IMG" && \
+    lsinitrd "$IMG" | grep -q surface_aggregator && \
+    echo ">>> initramfs contains surface_aggregator: OK"
