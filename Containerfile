@@ -33,7 +33,7 @@ RUN curl -fsSL https://raw.githubusercontent.com/linux-surface/linux-surface/mas
 # packages remain. This is version-robust: it does not assume which kernel
 # subpackages the base image happens to ship (kernel-modules-core is separate
 # on modern Fedora and must not be left behind mismatched).
-RUN dnf5 -y --allowerasing install \
+RUN dnf5 -y install --allowerasing \
       kernel-surface kernel-surface-core kernel-surface-modules \
       kernel-surface-modules-core kernel-surface-modules-extra && \
     STOCK="$(rpm -qa 'kernel' 'kernel-core' 'kernel-modules' 'kernel-modules-core' 'kernel-modules-extra')" && \
