@@ -38,19 +38,25 @@ RUN dnf5 -y install --allowerasing \
       kernel-surface-modules-core kernel-surface-modules-extra && \
     STOCK="$(rpm -qa 'kernel' 'kernel-core' 'kernel-modules' 'kernel-modules-core' 'kernel-modules-extra')" && \
     if [ -n "$STOCK" ]; then dnf5 -y remove --no-autoremove $STOCK; fi && \
-    dnf5 -y install --allowerasing iptsd libwacom-surface && \
+    dnf5 -y install iptsd && \
     dnf5 clean all
+# NOTE: libwacom-surface is deliberately NOT installed. On the Fedora 44 base it
+# conflicts with the newer stock libwacom, and forcing it with --allowerasing
+# cascades into removing KDE Plasma. The pen and touch work through iptsd
+# without it. Revisit only when linux-surface publishes f44.
 
 # Fail the build if we did not end up on the surface kernel, and print the
 # resolved version to the CI log so you can see exactly which kernel landed.
 RUN rpm -q kernel-surface >/dev/null || { echo "ERROR: kernel-surface not installed"; exit 1; } && \
     echo ">>> Surface kernel installed: $(rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-surface)"
 
-# Enable the Intel Precise Touch & Stylus daemon for touch and pen support.
-RUN systemctl enable iptsd.service
+# iptsd (Intel Precise Touch & Stylus) needs no manual enable. It ships a
+# templated unit iptsd@.service plus a udev rule that starts it automatically
+# when the touchscreen appears. There is no plain iptsd.service to enable.
 
-# Regenerate the initramfs for the surface kernel.
+# Regenerate the initramfs for the surface kernel. Use --no-hostonly so the
+# image is portable (the build host is not the target hardware).
 RUN KERNEL_VERSION="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}\n' kernel-surface | tail -n 1)" && \
-    dracut --kver "${KERNEL_VERSION}" --force \
+    dracut --kver "${KERNEL_VERSION}" --force --no-hostonly \
       --add-drivers "surface_aggregator surface_aggregator_registry surface_hid" \
       "/usr/lib/modules/${KERNEL_VERSION}/initramfs.img"
