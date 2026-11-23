@@ -1,0 +1,54 @@
+# Builds the Roost iOS app (roost/ios) on a macOS runner. Only runs for the
+# Roost development branches; independent of the Aurora image build.
+name: Roost iOS
+
+on:
+  push:
+    branches: ['claude/family-org-app-**']
+    paths: ['roost/ios/**', 'roost/shared/**', '.github/workflows/roost-ios.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: roost-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: RoostKit tests (macOS)
+        working-directory: roost/ios/RoostKit
+        run: swift test 2>&1 | tail -40
+
+      - name: Generate Xcode project
+        working-directory: roost/ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build app for iOS Simulator (unsigned)
+        working-directory: roost/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Roost.xcodeproj -scheme Roost -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning: .*(deprecated|never)|BUILD (SUCCEEDED|FAILED)" | head -200
+
+      - name: Upload generated project and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roost-ios-project
+          path: |
+            roost/ios/Roost.xcodeproj
+            roost/ios/build.log
+          retention-days: 14

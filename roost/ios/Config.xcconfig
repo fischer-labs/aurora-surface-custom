@@ -1,0 +1,12 @@
+// Roost build settings — edit these, then run `xcodegen` (or just build if the
+// project already exists; Xcode re-reads this file).
+
+// Your Apple Developer Team ID (developer.apple.com → Membership details).
+DEVELOPMENT_TEAM =
+
+// Bundle identifier. Must be unique to your team, e.g. com.yourname.roost
+ROOST_BUNDLE_ID = com.example.roost
+
+// Your Roost server host name (no https://). Users can still change it on the
+// sign-in screen. Example: family.example.com  (leave empty to ask on launch)
+ROOST_SERVER_HOST =
