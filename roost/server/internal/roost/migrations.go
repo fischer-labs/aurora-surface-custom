@@ -10,4 +10,8 @@ func init() {
 	core.AppMigrations.Register(func(txApp core.App) error {
 		return EnsureSchema(txApp)
 	}, nil, "1732320000_roost_schema_v1.go")
+	// v2: agentKeys (MCP endpoint).
+	core.AppMigrations.Register(func(txApp core.App) error {
+		return EnsureSchema(txApp)
+	}, nil, "1763900000_roost_schema_v2.go")
 }

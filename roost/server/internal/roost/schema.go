@@ -353,6 +353,29 @@ func EnsureSchema(app core.App) error {
 		return err
 	}
 
+	// ---- agentKeys (MCP access for a person's AI assistants) -------------
+	// Keys are created through /api/roost/agent-keys, which returns the
+	// secret once; only its SHA-256 is stored.
+	agentKeys := getOrNew(app, "agentKeys")
+	agentKeys.Fields.Add(
+		&core.RelationField{Name: "family", CollectionId: families.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+		&core.RelationField{Name: "user", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+		&core.TextField{Name: "name", Max: 80},
+		&core.TextField{Name: "tokenHash", Max: 64, Hidden: true},
+		&core.TextField{Name: "hint", Max: 12},
+		&core.DateField{Name: "lastUsedAt"},
+	)
+	addTimestamps(agentKeys)
+	agentKeys.ListRule = ptr(`user = @request.auth.id`)
+	agentKeys.ViewRule = agentKeys.ListRule
+	agentKeys.CreateRule = nil
+	agentKeys.UpdateRule = nil
+	agentKeys.DeleteRule = ptr(`user = @request.auth.id`)
+	agentKeys.AddIndex("idx_agentkeys_hash", true, "tokenHash", "")
+	if err := app.Save(agentKeys); err != nil {
+		return err
+	}
+
 	// ---- users: rules reference memberships, so they come last -----------
 	// Sign-up is gated by the hook in hooks.go (first user or valid invite code).
 	users.CreateRule = ptr("")

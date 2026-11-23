@@ -80,6 +80,7 @@ func Register(app core.App, cfg Config) {
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		registerRoutes(se, cfg)
+		registerMCP(se)
 		return se.Next()
 	})
 
