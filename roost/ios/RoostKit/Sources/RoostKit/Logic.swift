@@ -12,6 +12,7 @@ public struct LayoutItem: Sendable {
 public struct LayoutSlot: Equatable, Sendable {
     public var col: Int
     public var cols: Int
+    public init(col: Int, cols: Int) { self.col = col; self.cols = cols }
 }
 
 public enum DayLayout {
