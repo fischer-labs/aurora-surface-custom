@@ -21,16 +21,29 @@ func registerHooks(app core.App, cfg Config) {
 		if e.HasSuperuserAuth() || cfg.OpenSignup {
 			return e.Next()
 		}
-		total, _ := e.App.CountRecords("families")
-		if total == 0 {
-			return e.Next() // bootstrap: the very first family owner
-		}
 		info, _ := e.RequestInfo()
 		code, _ := info.Body["inviteCode"].(string)
-		if inv := findValidInvite(e.App, code); inv != nil {
+		total, _ := e.App.CountRecords("families")
+		if total == 0 {
+			// Bootstrap: the very first family owner, who proves they run the
+			// server with the setup code printed in its log.
+			if cfg.SetupCode != "" && normalizeInviteCode(code) != normalizeInviteCode(cfg.SetupCode) {
+				return e.ForbiddenError("Enter the setup code from the Roost server log.", nil)
+			}
 			return e.Next()
 		}
-		return e.ForbiddenError("Sign-up needs an invite code from your family.", nil)
+		inv := findValidInvite(e.App, code)
+		if inv == nil {
+			return e.ForbiddenError("Sign-up needs an invite code from your family.", nil)
+		}
+		if inv.GetInt("signups") >= 1 {
+			return e.ForbiddenError("This invite already created an account. Sign in instead, or ask for a new invite.", nil)
+		}
+		if err := e.Next(); err != nil {
+			return err
+		}
+		inv.Set("signups", inv.GetInt("signups")+1)
+		return e.App.Save(inv)
 	})
 
 	// ---- families: owner + seed defaults ---------------------------------
@@ -134,6 +147,11 @@ func registerHooks(app core.App, cfg Config) {
 		orig := e.Record.Original()
 		fam := orig.GetString("family")
 		e.Record.Set("family", fam)
+		manageOnly := orig.GetBool("deleted") != e.Record.GetBool("deleted") || orig.GetBool("archived") != e.Record.GetBool("archived") ||
+			orig.GetString("kind") != e.Record.GetString("kind")
+		if manageOnly && !canManage(e.App, orig, authID(e.RequestEvent)) && !e.HasSuperuserAuth() {
+			return e.ForbiddenError("Only parents or the owner can delete, archive or change this.", nil)
+		}
 		if !jsonEqual(orig.Get("sharing"), e.Record.Get("sharing")) || orig.GetString("owner") != e.Record.GetString("owner") {
 			if !canManage(e.App, orig, authID(e.RequestEvent)) && !e.HasSuperuserAuth() {
 				return e.ForbiddenError("Only parents or the owner can change sharing.", nil)
@@ -208,7 +226,16 @@ func registerHooks(app core.App, cfg Config) {
 	app.OnRecordCreate("tasks", "groceryItems").BindFunc(setFamilyFromList)
 
 	app.OnRecordCreateRequest("tasks").BindFunc(func(e *core.RecordRequestEvent) error {
-		e.Record.Set("createdBy", authID(e.RequestEvent))
+		uid := authID(e.RequestEvent)
+		if l, err := e.App.FindRecordById("lists", e.Record.GetString("list")); err == nil && !contains(l.GetStringSlice("editors"), uid) && !e.HasSuperuserAuth() {
+			// Assignees without edit access may only file the completed copy
+			// of a repeating to-do they were assigned.
+			me := membershipFor(e.App, l.GetString("family"), uid)
+			if me == nil || !e.Record.GetBool("completed") || e.Record.GetString("rrule") != "" || !contains(e.Record.GetStringSlice("assignees"), me.Id) {
+				return e.ForbiddenError("You can't add to-dos to this list.", nil)
+			}
+		}
+		e.Record.Set("createdBy", uid)
 		if err := validateTask(e.App, e.Record); err != nil {
 			return e.BadRequestError(err.Error(), nil)
 		}
@@ -220,6 +247,19 @@ func registerHooks(app core.App, cfg Config) {
 			return err
 		}
 		e.Record.Set("family", orig.GetString("family"))
+		if l, err := e.App.FindRecordById("lists", orig.GetString("list")); err == nil && !contains(l.GetStringSlice("editors"), authID(e.RequestEvent)) && !e.HasSuperuserAuth() {
+			// Assigned but not an editor: tick it off (and roll a repeating
+			// to-do forward), nothing else.
+			allowed := map[string]bool{"completed": true, "completedAt": true, "completedBy": true, "updated": true}
+			if orig.GetString("rrule") != "" {
+				allowed["due"] = true
+			}
+			for _, f := range e.Record.Collection().Fields {
+				if !allowed[f.GetName()] && !jsonEqual(orig.Get(f.GetName()), e.Record.Get(f.GetName())) {
+					return e.ForbiddenError("You can only mark this to-do done.", nil)
+				}
+			}
+		}
 		if e.Record.GetBool("completed") && !orig.GetBool("completed") {
 			e.Record.Set("completedBy", authID(e.RequestEvent))
 			if e.Record.GetDateTime("completedAt").IsZero() {
@@ -433,7 +473,16 @@ func validateEvent(app core.App, r *core.Record) error {
 	if rr := r.GetString("rrule"); rr != "" && !strings.Contains(strings.ToUpper(rr), "FREQ=") {
 		return fmt.Errorf("rrule needs FREQ")
 	}
-	return nil
+	if strings.ContainsAny(r.GetString("rrule")+r.GetString("url"), "\r\n") {
+		return fmt.Errorf("line breaks aren't allowed in rrule or url")
+	}
+	if !validTimezone(r.GetString("tz")) {
+		return fmt.Errorf("unknown time zone %q", r.GetString("tz"))
+	}
+	if err := validateJSONList(r, "exdates", 2000, isOccurrenceKey); err != nil {
+		return err
+	}
+	return validateJSONList(r, "reminders", 10, isReminder)
 }
 
 func validateTask(app core.App, r *core.Record) error {
@@ -450,7 +499,13 @@ func validateTask(app core.App, r *core.Record) error {
 			return err
 		}
 	}
-	return nil
+	if !dueRe.MatchString(r.GetString("due")) {
+		return fmt.Errorf("due must be YYYY-MM-DD or YYYY-MM-DDTHH:mm")
+	}
+	if err := validateJSONList(r, "tags", 30, isShortString); err != nil {
+		return err
+	}
+	return validateJSONList(r, "reminders", 10, isReminder)
 }
 
 func checkListMove(e *core.RecordRequestEvent, orig *core.Record) error {
@@ -471,7 +526,8 @@ func checkListMove(e *core.RecordRequestEvent, orig *core.Record) error {
 }
 
 // Person colors (DESIGN §12), handed out in order.
-var personColors = []string{"blue", "orange", "green", "violet", "pink", "teal", "red", "amber", "indigo", "cyan", "lime", "brown"}
+// Orange comes last: it sits close to the ember accent.
+var personColors = []string{"blue", "green", "violet", "pink", "teal", "red", "amber", "indigo", "cyan", "lime", "brown", "orange"}
 
 func nextColor(app core.App, familyID string) string {
 	used := map[string]bool{}
@@ -575,12 +631,12 @@ func seedFamily(app core.App, family *core.Record, auth *core.Record) error {
 		coll   string
 		fields map[string]any
 	}{
-		{"calendars", map[string]any{"name": "Family", "kind": "family", "color": "orange", "sortOrder": 0, "defaultReminders": []int{30}}},
+		{"calendars", map[string]any{"name": "Family", "kind": "family", "color": "indigo", "sortOrder": 0, "defaultReminders": []int{30}}},
 		{"calendars", map[string]any{"name": name, "kind": "personal", "color": personColors[0], "owner": owner.Id, "sortOrder": 1, "defaultReminders": []int{15}}},
 		{"lists", map[string]any{"name": "Groceries", "kind": "grocery", "icon": "cart", "color": "green", "sortOrder": 0}},
-		{"lists", map[string]any{"name": "To-Do", "kind": "todo", "icon": "checklist", "color": "blue", "sortOrder": 1}},
+		{"lists", map[string]any{"name": "Household", "kind": "todo", "icon": "checklist", "color": "blue", "sortOrder": 1}},
 		{"infoCards", map[string]any{"title": "Emergency contacts", "kind": "contact", "icon": "phone", "pinned": true, "sortOrder": 0,
-			"body": "Pediatrician: \nPoison Control: 1-800-222-1222\nNeighbor: \nGrandparents: "}},
+			"body": "Pediatrician: \nPoison Control: 1-800-222-1222\nNeighbor: \nGrandparents: ", "phone": "1-800-222-1222"}},
 		{"infoCards", map[string]any{"title": "Allergies & medications", "kind": "medical", "icon": "cross.case", "pinned": true, "sortOrder": 1,
 			"body": "Allergies: none known\nMedications: \nInsurance: "}},
 	}

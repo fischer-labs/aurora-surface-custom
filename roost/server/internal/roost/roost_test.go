@@ -29,9 +29,12 @@ type env struct {
 	srv *httptest.Server
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { t.Helper(); return newEnvCfg(t, Config{}) }
+
+func newEnvCfg(t *testing.T, cfg Config) *env {
 	t.Helper()
 	asyncInitialSync = false
+	manualRefreshEvery = 0
 	app, err := tests.NewTestAppWithConfig(core.BaseAppConfig{DataDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +43,8 @@ func newEnv(t *testing.T) *env {
 	os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<!doctype html><html><head><title>Roost</title></head><body></body></html>"), 0o644)
 	os.MkdirAll(filepath.Join(webDir, "assets"), 0o755)
 	os.WriteFile(filepath.Join(webDir, "assets", "app.js"), []byte("console.log(1)"), 0o644)
-	Register(app, Config{WebPath: "/h/test-path/", WebDir: webDir})
+	cfg.WebPath, cfg.WebDir = "/h/test-path/", webDir
+	Register(app, cfg)
 
 	router, err := apis.NewRouter(app)
 	if err != nil {
@@ -343,7 +347,7 @@ func TestFamilyRolesEndToEnd(t *testing.T) {
 
 	// --- lists and tasks
 	nannyLists := titles(e.list("lists", nanny, ""), "name")
-	if !has(nannyLists, "Groceries") || has(nannyLists, "To-Do") {
+	if !has(nannyLists, "Groceries") || has(nannyLists, "Household") {
 		t.Fatalf("nanny lists wrong: %v", nannyLists)
 	}
 	if n := len(e.list("lists", grandma, "")); n != 0 {

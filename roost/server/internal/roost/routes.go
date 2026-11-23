@@ -20,6 +20,7 @@ func registerRoutes(se *core.ServeEvent, cfg Config) {
 			"version":     Version,
 			"categorizer": cfg.LLMURL != "",
 			"openSignup":  cfg.OpenSignup,
+			"setupCode":   needsSetupCode(e.App, cfg),
 		})
 	})
 
@@ -136,8 +137,14 @@ func registerRoutes(se *core.ServeEvent, cfg Config) {
 		if !contains(cal.GetStringSlice("viewers"), e.Auth.Id) {
 			return e.ForbiddenError("No access to this calendar.", nil)
 		}
-		syncErr := SyncSubscription(e.App, cfg, cal)
+		var syncErr error
+		if allowManualRefresh(cal.Id) {
+			syncErr = SyncSubscription(e.App, cfg, cal)
+		}
 		fresh, _ := e.App.FindRecordById("calendars", cal.Id)
+		if fresh != nil && !canManage(e.App, fresh, e.Auth.Id) {
+			fresh.Hide("sourceUrl")
+		}
 		resp := map[string]any{"ok": syncErr == nil, "calendar": fresh}
 		if syncErr != nil {
 			resp["error"] = syncErr.Error()
@@ -326,4 +333,13 @@ func buildFeed(app core.App, feed *core.Record, now time.Time) (string, error) {
 		name = fam.GetString("name")
 	}
 	return WriteICS(name, fam.GetString("timezone"), events, now), nil
+}
+
+// needsSetupCode tells the sign-up screen to ask for the server's setup code.
+func needsSetupCode(app core.App, cfg Config) bool {
+	if cfg.SetupCode == "" || cfg.OpenSignup {
+		return false
+	}
+	n, _ := app.CountRecords("families")
+	return n == 0
 }

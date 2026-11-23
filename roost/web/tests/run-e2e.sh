@@ -7,7 +7,7 @@ WORK=$(mktemp -d)
 PORT=${PORT:-8097}
 (cd "$ROOT/server" && CGO_ENABLED=0 go build -o "$WORK/roost-server" .)
 (cd "$ROOT/web" && npx tsc --noEmit && npx vite build >/dev/null)
-ROOST_WEB_PATH=/h/test-family/ ROOST_WEB_DIR="$ROOT/web/dist" "$WORK/roost-server" serve --http 127.0.0.1:$PORT --dir "$WORK/pb" >"$WORK/server.log" 2>&1 &
+ROOST_SETUP_CODE=E2ET-EST1 ROOST_RATE_LIMIT=off ROOST_WEB_PATH=/h/test-family/ ROOST_WEB_DIR="$ROOT/web/dist" "$WORK/roost-server" serve --http 127.0.0.1:$PORT --dir "$WORK/pb" >"$WORK/server.log" 2>&1 &
 PID=$!
 trap 'kill $PID 2>/dev/null; rm -rf "$WORK"' EXIT
 for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null && break; sleep 0.2; done

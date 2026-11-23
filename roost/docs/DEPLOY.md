@@ -87,7 +87,13 @@ curl -I https://family.example.com/                   # 404 — the root reveals
 open https://family.example.com/h/9f3c1a7e2b/         # the web app
 ```
 
-The **first account created becomes the family owner**. After that, sign-up only works with an invite code.
+The **first account created becomes the family owner**. So that nobody else can claim a freshly started server, that first sign-up asks for a **setup code** printed in the server log:
+
+```bash
+docker compose logs roost | grep "Setup code"     # → Setup code: K7QM-2XPD
+```
+
+(Set your own with `ROOST_SETUP_CODE` in `.env`, or `off` to skip.) After the first family exists, sign-up only works with an invite code, and each invite creates at most one account.
 
 ---
 
@@ -184,8 +190,11 @@ Database migrations run automatically at start. TestFlight builds expire after 9
 
 ## Security notes
 
-- Invite-only sign-up after the first account; invite codes are single-use and expire in 7 days.
+- The first account needs the setup code from the server log; after that, sign-up is invite-only. Each invite code creates one account, joins once and expires in 7 days.
+- PocketBase rate limits are on (sign-in guessing is throttled). `ROOST_RATE_LIMIT=off` disables them.
 - Access is enforced on the server (API rules + hooks, covered by Go integration tests per role), not just hidden in the apps.
 - Personal ICS feed URLs are secret 32-byte tokens; delete the feed (Family → Calendars) to revoke.
-- Subscription fetching refuses private/loopback addresses unless you opt in, so a pasted link can't probe your LAN.
+- Subscription fetching refuses private, loopback, link-local, CGNAT/Tailscale and NAT64 addresses (checked again at connect time, so DNS tricks don't help) unless you opt in, so a pasted link can't probe your LAN.
+- Subscription links (often a "secret address" for someone's personal calendar) are only shown to the people who manage that calendar — not to those who merely see it or its busy times.
+- AI assistant keys are stored only as SHA-256 hashes and act with exactly their owner's access; revoke them in Family → Settings.
 - Keep `pb_data/` backed up and off public file shares; it contains everything.

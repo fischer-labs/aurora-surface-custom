@@ -94,14 +94,14 @@ func WriteICS(calName, tz string, events []ICSEvent, now time.Time) string {
 			p("DTEND;VALUE=DATE:" + end.In(loc).Format("20060102"))
 		case ev.RRule != "" && ev.TZ != "":
 			// Wall-clock recurrence so 4 pm stays 4 pm across DST.
-			p("DTSTART;TZID=" + ev.TZ + ":" + ev.Start.In(loc).Format("20060102T150405"))
-			p("DTEND;TZID=" + ev.TZ + ":" + ev.End.In(loc).Format("20060102T150405"))
+			p("DTSTART;TZID=" + loc.String() + ":" + ev.Start.In(loc).Format("20060102T150405"))
+			p("DTEND;TZID=" + loc.String() + ":" + ev.End.In(loc).Format("20060102T150405"))
 		default:
 			p("DTSTART:" + ev.Start.UTC().Format("20060102T150405Z"))
 			p("DTEND:" + ev.End.UTC().Format("20060102T150405Z"))
 		}
 		if ev.RRule != "" {
-			p("RRULE:" + ev.RRule)
+			p("RRULE:" + stripCRLF(ev.RRule))
 			for _, key := range ev.ExDates {
 				if v, ok := exdateValue(key, ev.AllDay, ev.TZ); ok {
 					p(v)
@@ -120,8 +120,8 @@ func WriteICS(calName, tz string, events []ICSEvent, now time.Time) string {
 			if ev.Location != "" {
 				p("LOCATION:" + icsEscape(ev.Location))
 			}
-			if ev.URL != "" {
-				p("URL:" + ev.URL)
+			if u := stripCRLF(ev.URL); u != "" {
+				p("URL:" + u)
 			}
 			if len(ev.Categories) > 0 {
 				cs := make([]string, len(ev.Categories))
@@ -138,6 +138,9 @@ func WriteICS(calName, tz string, events []ICSEvent, now time.Time) string {
 }
 
 func exdateValue(key string, allDay bool, tz string) (string, bool) {
+	if len(key) < 10 {
+		return "", false
+	}
 	if allDay || len(key) == 10 {
 		t, err := time.Parse("2006-01-02", key[:10])
 		if err != nil {
@@ -475,4 +478,14 @@ var windowsZones = map[string]string{
 	"New Zealand Standard Time":      "Pacific/Auckland",
 	"UTC":                            "UTC",
 	"Coordinated Universal Time":     "UTC",
+}
+
+// stripCRLF keeps a value on one content line so it can't inject properties.
+func stripCRLF(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, s)
 }

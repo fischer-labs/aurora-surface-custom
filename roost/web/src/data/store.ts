@@ -107,7 +107,7 @@ export const learnedMap = (s: State = state) => new Map(s.learned.map((l) => [l.
 export function colorFor(e: EventRec, byPerson = true, s: State = state): string {
   if (e.color) return e.color;
   if (byPerson && e.members?.length) { const m = member(e.members[0], s); if (m) return m.color; }
-  return s.calendars.find((c) => c.id === e.calendar)?.color ?? 'orange';
+  return s.calendars.find((c) => c.id === e.calendar)?.color ?? 'brown';
 }
 export const familyTZ = () => validTZ(state.family?.timezone);
 

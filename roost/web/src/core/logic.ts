@@ -36,12 +36,12 @@ export const ROLES: Role[] = ['owner', 'parent', 'caregiver', 'relative', 'kid']
 export const LEVEL_RANK: Record<Level, number> = { none: 0, busy: 1, view: 2, edit: 3 };
 export interface Sharing { roles?: Partial<Record<Role, Level>>; people?: Record<string, Level> }
 
-export const ROLE_LABEL: Record<Role, string> = { owner: 'Owner', parent: 'Parent', caregiver: 'Caregiver', relative: 'Family', kid: 'Kid' };
+export const ROLE_LABEL: Record<Role, string> = { owner: 'Owner', parent: 'Parent', caregiver: 'Caregiver', relative: 'Relative', kid: 'Kid' };
 export const ROLE_BLURB: Record<Role, string> = {
   owner: 'Full control, including roles and sharing.',
   parent: 'Manages calendars, lists, invites and sharing.',
   caregiver: "Nanny or sitter: kids' schedule, groceries, assigned to-dos, care info.",
-  relative: 'Grandparents and family: view the family calendar and care info.',
+  relative: 'Grandparents, aunts & uncles: view the family calendar and care info.',
   kid: 'Sees the family calendar, adds to groceries, checks off their to-dos.',
 };
 export const LEVEL_LABEL: Record<Level, string> = { none: 'No access', busy: 'Busy only', view: 'Can view', edit: 'Can edit' };

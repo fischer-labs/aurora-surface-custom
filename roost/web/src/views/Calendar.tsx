@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Filter, House, Plus, Text } from 'lucide-rea
 import { editableCalendars, liveCalendars, newEvent, sortedMembers, useRoost } from '../data/store';
 import type { EventRec } from '../data/models';
 import { layoutDay } from '../core/logic';
-import { Avatar, AvatarStack, Dot, Menu, Seg, Toggle, colorVar } from '../ui/kit';
+import { Avatar, AvatarStack, Dot, Menu, Seg, Toggle, colorVar, fillVar, textOn } from '../ui/kit';
 import { buildItems, setPrefs, usePrefs, type CalItem } from '../ui/calitems';
 import { addDays, addMonths, dayTitle, fmtHour, fmtTime, isToday, sameDay, startOfDay } from '../ui/format';
 import { EventEditor, ItemModal } from './EventModal';
@@ -160,7 +160,8 @@ function MonthView({ anchor, onPick, onOpen, onNew }: { anchor: Date; onPick: (d
     return m;
   }, [items]);
   const selected = byDay.get(anchor.toDateString()) ?? [];
-  const max = window.innerWidth < 820 ? 2 : 4;
+  const phone = window.innerWidth < 820;
+  const max = 4;
   return (
     <>
       <div className="month" role="grid" aria-label="Month">
@@ -173,7 +174,7 @@ function MonthView({ anchor, onPick, onOpen, onNew }: { anchor: Date; onPick: (d
               onClick={() => onPick(d)} onDoubleClick={() => { const x = new Date(d); x.setHours(9); onNew(x); }}>
               <span className="num">{d.getDate()}</span>
               {list.slice(0, max).map((it) => <Pill key={it.id + d.getDate()} it={it} onOpen={onOpen} />)}
-              {list.length > max && <span className="more">+{list.length - max} more</span>}
+              {list.length > max && <span className="more">+{list.length - max}{phone ? '' : ' more'}</span>}
             </div>
           );
         })}
@@ -188,9 +189,10 @@ function MonthView({ anchor, onPick, onOpen, onNew }: { anchor: Date; onPick: (d
 function Pill({ it, onOpen }: { it: CalItem; onOpen: (i: CalItem) => void }) {
   const c = colorVar(it.color);
   const style = it.busy ? { background: 'var(--surface2)', color: 'var(--ink2)' }
-    : it.allDay ? { background: c } : { background: `color-mix(in srgb, ${c} 18%, transparent)`, color: 'var(--ink)' };
+    : it.allDay ? { background: fillVar(it.color), color: textOn(it.color) }
+      : { background: `color-mix(in srgb, ${c} var(--tint), transparent)`, color: 'var(--ink)', '--c': c } as React.CSSProperties;
   return (
-    <div className={`pill${it.allDay && !it.busy ? ' allday' : ''}`} style={style} title={it.title}
+    <div className={`pill${it.busy ? ' busy' : it.allDay ? ' allday' : ' timed'}`} style={style} title={it.title}
       onClick={(e) => { e.stopPropagation(); onOpen(it); }}>
       {!it.allDay && <span className="t">{fmtTime(it.start).replace(':00', '').replace(/\s?(AM|PM)/i, (m) => m.trim()[0].toLowerCase())}</span>}
       {it.task ? '○ ' : ''}{it.title}
@@ -247,7 +249,7 @@ function YearView({ anchor, onPickMonth }: { anchor: Date; onPickMonth: (d: Date
         const current = new Date().getFullYear() === anchor.getFullYear() && new Date().getMonth() === i;
         return (
           <div key={i} className="mini" onClick={() => onPickMonth(m0)} role="button" tabIndex={0}>
-            <h3 style={{ color: current ? 'var(--accent)' : undefined }}>{m0.toLocaleDateString([], { month: 'long' })}</h3>
+            <h3 style={{ textDecoration: current ? 'underline' : undefined, textDecorationColor: 'var(--accent)', textUnderlineOffset: 4 }}>{m0.toLocaleDateString([], { month: 'long' })}</h3>
             <div className="g">
               {Array.from({ length: lead }, (_, j) => <span key={'b' + j} />)}
               {Array.from({ length: n }, (_, j) => {
@@ -255,8 +257,8 @@ function YearView({ anchor, onPickMonth }: { anchor: Date; onPickMonth: (d: Date
                 const c = counts.get(d.toDateString()) ?? 0;
                 return (
                   <span key={j} style={{
-                    background: c ? `color-mix(in srgb, var(--accent) ${Math.min(20 + c * 18, 95)}%, transparent)` : undefined,
-                    color: c > 2 ? '#fff' : 'var(--ink2)', outline: isToday(d) ? '1.5px solid var(--accent)' : undefined,
+                    background: c ? `color-mix(in srgb, var(--ink2) ${Math.min(10 + c * 10, 45)}%, transparent)` : undefined,
+                    color: c ? 'var(--ink)' : 'var(--ink2)', outline: isToday(d) ? '1.5px solid var(--accent)' : undefined,
                   }}>{j + 1}</span>
                 );
               })}
@@ -279,9 +281,17 @@ function TimeGrid({ anchor, days, byPeople, onOpen, onNew, onPickDay }: {
   const scroller = useRef<HTMLDivElement>(null);
   const hour = 52;
   useEffect(() => {
-    const h = isToday(anchor) ? Math.max(0, new Date().getHours() - 1) : 7;
-    scroller.current?.scrollTo({ top: h * hour });
-  }, [anchor.getTime(), days, byPeople]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Today in view → an hour before now; otherwise the first timed event (or 7 AM if later).
+    // Never cut an event off at the top edge, which would leave an untitled block.
+    const timed = items.filter((i) => !i.allDay);
+    const hourOf = (d: Date) => Math.max(0, (d.getTime() - startOfDay(d).getTime()) / 3600000);
+    const showsToday = Array.from({ length: byPeople ? 1 : days }, (_, i) => addDays(first, i)).some(isToday);
+    let h = showsToday ? Math.max(0, new Date().getHours() - 1) : Math.min(7, ...timed.map((i) => hourOf(i.start)));
+    for (const i of timed) {
+      if (hourOf(i.start) < h && (sameDay(i.start, i.end) ? hourOf(i.end) : 24) > h) h = hourOf(i.start);
+    }
+    scroller.current?.scrollTo({ top: Math.max(0, h - 0.25) * hour });
+  }, [anchor.getTime(), days, byPeople, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   type Col = { key: string; day: Date; label: React.ReactNode; today: boolean; filter: (i: CalItem) => boolean };
   const cols: Col[] = byPeople
@@ -290,7 +300,7 @@ function TimeGrid({ anchor, days, byPeople, onOpen, onNew, onPickDay }: {
       label: <><Avatar member={m} size={26} /><div style={{ color: 'var(--ink)', marginTop: 3 }}>{m.name.split(' ')[0]}</div></>,
     })), {
       key: '_all', day: first, today: false, filter: (i: CalItem) => !i.memberIds.length && !i.driver,
-      label: <><House size={22} color="var(--accent)" /><div style={{ color: 'var(--ink)', marginTop: 3 }}>Everyone</div></>,
+      label: <><House size={22} color="var(--ink2)" /><div style={{ color: 'var(--ink)', marginTop: 3 }}>Everyone</div></>,
     }]
     : Array.from({ length: days }, (_, i) => {
       const d = addDays(first, i);
@@ -321,7 +331,7 @@ function TimeGrid({ anchor, days, byPeople, onOpen, onNew, onPickDay }: {
             {cols.map((c) => (
               <div key={c.key}>
                 {items.filter((i) => i.allDay && i.start < addDays(c.day, 1) && i.end > c.day && c.filter(i)).slice(0, 3).map((i) => (
-                  <div key={i.id} className={`pill allday`} style={{ background: i.busy ? 'var(--ink3)' : colorVar(i.color) }} onClick={() => onOpen(i)}>{i.title}</div>
+                  <div key={i.id} className={`pill allday`} style={{ background: i.busy ? 'var(--ink3)' : fillVar(i.color), color: i.busy ? '#fff' : textOn(i.color) }} onClick={() => onOpen(i)}>{i.title}</div>
                 ))}
               </div>
             ))}

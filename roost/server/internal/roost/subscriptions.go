@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -45,16 +46,55 @@ func checkHostAllowed(ctx context.Context, host string, allowPrivate bool) error
 		return err
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+		if blockedIP(ip) {
 			return fmt.Errorf("refusing to fetch from private address %s (set ROOST_ALLOW_PRIVATE_FEEDS=1 to allow)", ip)
 		}
 	}
 	return nil
 }
 
+var blockedNets = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, c := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16"} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()
+
+// blockedIP covers loopback, private, link-local, CGNAT/Tailscale, benchmark,
+// NAT64 and 6to4 ranges.
+func blockedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	for _, n := range blockedNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func feedClient(allowPrivate bool) *http.Client {
+	dialer := &net.Dialer{Timeout: 15 * time.Second}
+	if !allowPrivate {
+		// Re-check the address actually dialled so DNS rebinding can't slip
+		// past the lookup above.
+		dialer.Control = func(network, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			if ip := net.ParseIP(host); ip == nil || blockedIP(ip) {
+				return fmt.Errorf("refusing to connect to %s", host)
+			}
+			return nil
+		}
+	}
 	return &http.Client{
-		Timeout: 45 * time.Second,
+		Timeout:   45 * time.Second,
+		Transport: &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 30 * time.Second, MaxIdleConns: 4, IdleConnTimeout: 30 * time.Second},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return errors.New("too many redirects")

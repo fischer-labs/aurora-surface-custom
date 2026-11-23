@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car, ChevronRight, MapPin, Plus, Repeat, ShoppingCart, Sparkles } from 'lucide-react';
 import { liveCards, me, member, membersOf, todayKey, toggleTask, useRoost } from '../data/store';
-import { AvatarStack, Chip, colorVar, SyncBadge } from '../ui/kit';
+import { AvatarStack, Chip, colorVar, fillVar, textOn, SyncBadge } from '../ui/kit';
 import { buildItems, usePrefs, type CalItem } from '../ui/calitems';
 import { fmtTime, startOfDay } from '../ui/format';
 import { ItemModal } from './EventModal';
 import { QuickAdd } from './QuickAdd';
 import { TaskRow } from './Todos';
-import { CardModal, cardIcon } from './Family';
+import { CardModal, CardIcon, cardPreview } from './Family';
 import type { CardRec } from '../data/models';
 
 export function Today() {
@@ -40,7 +40,11 @@ export function Today() {
         <div className="hello grow">
           <small>{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</small>
           <h1>{greeting}</h1>
-          <div className="muted">{s.family?.name} <SyncBadge /></div>
+          <div className="muted">{[
+            items.length ? `${items.length} event${items.length === 1 ? '' : 's'}` : 'No events',
+            due.length ? `${due.length} to-do${due.length === 1 ? '' : 's'} due` : '',
+            groceries.length ? `${groceries.length} grocer${groceries.length === 1 ? 'y' : 'ies'}` : '',
+          ].filter(Boolean).join(' · ')} <SyncBadge /></div>
         </div>
         <button className="btn primary fab-mobile" onClick={() => setQuick(true)}><Plus size={18} /> Quick add</button>
       </div>
@@ -67,8 +71,7 @@ export function Today() {
           )}
           {groceryList && (
             <>
-              <div className="section-title"><h2>Groceries</h2></div>
-              <div className="card tile" onClick={() => nav('/groceries')} role="button" tabIndex={0}>
+              <div className="card tile" style={{ marginTop: 18 }} onClick={() => nav('/groceries')} role="button" tabIndex={0}>
                 <div className="ico" style={{ background: 'var(--green)' }}><ShoppingCart size={20} /></div>
                 <div style={{ flex: 1 }}>
                   <b>{groceryList.name}</b>
@@ -80,18 +83,15 @@ export function Today() {
           )}
           {pinned.length > 0 && (
             <>
-              <div className="section-title"><h2>Good to know</h2></div>
+              <div className="section-title"><h2>Care info</h2></div>
               <div className="info-cards">
-                {pinned.map((c) => {
-                  const Icon = cardIcon(c);
-                  return (
-                    <div key={c.id} className="card info-card" onClick={() => setCard(c)} role="button" tabIndex={0}>
-                      <Icon size={18} color="var(--accent)" />
-                      <div style={{ fontWeight: 650, marginTop: 6 }}>{c.title}</div>
-                      <p>{c.body}</p>
-                    </div>
-                  );
-                })}
+                {pinned.map((c) => (
+                  <div key={c.id} className="card info-card" onClick={() => setCard(c)} role="button" tabIndex={0}>
+                    <CardIcon card={c} />
+                    <div style={{ fontWeight: 650, marginTop: 8 }}>{c.title}</div>
+                    {cardPreview(c) ? <p>{cardPreview(c)}</p> : <p className="faint">Tap to fill in</p>}
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -112,7 +112,7 @@ function NextCard({ item, now, onOpen }: { item: CalItem; now: Date; onOpen: () 
   const driver = member(item.driver, s);
   return (
     <div className="next" role="button" tabIndex={0} onClick={onOpen}
-      style={{ background: `linear-gradient(135deg, ${colorVar(item.color)}, color-mix(in srgb, ${colorVar(item.color)} 75%, #000))` }}>
+      style={{ background: `linear-gradient(135deg, ${fillVar(item.color)}, color-mix(in srgb, ${fillVar(item.color)} 80%, #000))`, color: textOn(item.color) }}>
       <div style={{ flex: 1 }}>
         <div className="k">{isNow ? 'HAPPENING NOW' : 'UP NEXT'}</div>
         <h2>{item.title}</h2>
@@ -136,7 +136,7 @@ export function ItemRow({ item, onOpen }: { item: CalItem; onOpen: () => void })
       <div className="body">
         <div className="title" style={{ color: item.busy ? 'var(--ink3)' : undefined }}>
           {item.task && (
-            <button className="check" style={{ width: 18, height: 18, display: 'inline-grid', marginRight: 6, verticalAlign: -3, borderColor: colorVar(item.color) }}
+            <button className="check" style={{ width: 20, height: 20, display: 'inline-grid', marginRight: 8, verticalAlign: -4 }}
               onClick={(e) => { e.stopPropagation(); toggleTask(item.task!); }} aria-label="Mark done" />
           )}
           {item.title} {item.recurring && <Repeat size={12} color="var(--ink3)" />}

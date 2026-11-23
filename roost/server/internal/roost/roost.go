@@ -3,6 +3,7 @@
 package roost
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -27,6 +28,12 @@ type Config struct {
 	AllowPrivateFeeds   bool
 	// Optional OpenAI-compatible endpoint (e.g. Ollama) for unknown grocery items.
 	LLMURL, LLMModel, LLMKey string
+	// SetupCode must accompany the very first sign-up. ConfigFromEnv takes it
+	// from ROOST_SETUP_CODE or generates one (printed in the log); "off" or
+	// empty disables the check.
+	SetupCode string
+	// RateLimit turns on PocketBase's request rate limits.
+	RateLimit bool
 }
 
 func ConfigFromEnv() Config {
@@ -40,6 +47,14 @@ func ConfigFromEnv() Config {
 		LLMModel:            os.Getenv("ROOST_LLM_MODEL"),
 		LLMKey:              os.Getenv("ROOST_LLM_KEY"),
 		SubscriptionRefresh: 30 * time.Minute,
+		SetupCode:           os.Getenv("ROOST_SETUP_CODE"),
+		RateLimit:           !strings.EqualFold(os.Getenv("ROOST_RATE_LIMIT"), "off"),
+	}
+	switch {
+	case strings.EqualFold(cfg.SetupCode, "off"):
+		cfg.SetupCode = ""
+	case cfg.SetupCode == "":
+		cfg.SetupCode = newInviteCode()
 	}
 	if m, err := strconv.Atoi(os.Getenv("ROOST_SUBSCRIPTION_MINUTES")); err == nil && m >= 5 {
 		cfg.SubscriptionRefresh = time.Duration(m) * time.Minute
@@ -77,6 +92,7 @@ func envBool(k string) bool {
 func Register(app core.App, cfg Config) {
 	cfg = cfg.withDefaults()
 	registerHooks(app, cfg)
+	registerHardening(app, cfg)
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		registerRoutes(se, cfg)
@@ -90,6 +106,9 @@ func Register(app core.App, cfg Config) {
 		}
 		e.App.Cron().MustAdd("roostSubscriptions", "*/10 * * * *", func() { syncDueSubscriptions(e.App, cfg) })
 		e.App.Cron().MustAdd("roostHousekeeping", "17 3 * * *", func() { housekeeping(e.App) })
+		if n, _ := e.App.CountRecords("families"); n == 0 && cfg.SetupCode != "" {
+			fmt.Printf("\n  Roost is ready for its first family.\n  Setup code: %s  (enter it when you create the first account)\n\n", cfg.SetupCode)
+		}
 		return nil
 	})
 }

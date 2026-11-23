@@ -168,7 +168,7 @@ struct TodayView: View {
         let pinned = store.liveCards.filter(\.pinned)
         if !pinned.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(title: "Good to know")
+                SectionTitle(title: "Care info")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(pinned) { c in

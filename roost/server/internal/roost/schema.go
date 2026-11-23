@@ -29,6 +29,11 @@ const (
 func noServerFields(fields ...string) string {
 	s := ""
 	for _, f := range fields {
+		if f == "family" {
+			// Clients may echo the family back unchanged; they can't move records.
+			s += " && (@request.body.family:isset = false || @request.body.family = family)"
+			continue
+		}
 		s += " && @request.body." + f + ":isset = false"
 	}
 	return s
@@ -226,7 +231,7 @@ func EnsureSchema(app core.App) error {
 	tasks.Fields.Add(&core.RelationField{Name: "parent", CollectionId: tasks.Id, MaxSelect: 1, CascadeDelete: true})
 	tasks.ListRule = ptr(`list.viewers.id ?= @request.auth.id || assignees.user ?= @request.auth.id`)
 	tasks.ViewRule = tasks.ListRule
-	tasks.CreateRule = ptr(`list.editors.id ?= @request.auth.id` + noServerFields("family"))
+	tasks.CreateRule = ptr(`(list.editors.id ?= @request.auth.id || (@request.body.completed = true && list.family.members.id ?= @request.auth.id))` + noServerFields("family"))
 	tasks.UpdateRule = ptr(`(list.editors.id ?= @request.auth.id || assignees.user ?= @request.auth.id)` + noServerFields("family", "createdBy"))
 	tasks.DeleteRule = ptr(`list.editors.id ?= @request.auth.id`)
 	tasks.AddIndex("idx_tasks_family_updated", false, "family, updated", "")
@@ -319,12 +324,13 @@ func EnsureSchema(app core.App) error {
 		&core.DateField{Name: "expiresAt"},
 		&core.RelationField{Name: "createdBy", CollectionId: users.Id, MaxSelect: 1},
 		&core.RelationField{Name: "usedBy", CollectionId: users.Id, MaxSelect: 1},
+		&core.NumberField{Name: "signups", OnlyInt: true},
 		&core.DateField{Name: "usedAt"},
 	)
 	addTimestamps(invites)
 	invites.ListRule = ptr(ruleFamilyAdmin)
 	invites.ViewRule = ptr(ruleFamilyAdmin)
-	invites.CreateRule = ptr(ruleFamilyAdmin + noServerFields("code", "usedBy", "usedAt", "createdBy"))
+	invites.CreateRule = ptr(ruleFamilyAdmin + noServerFields("code", "usedBy", "usedAt", "createdBy", "signups"))
 	invites.UpdateRule = nil
 	invites.DeleteRule = ptr(ruleFamilyAdmin)
 	invites.AddIndex("idx_invites_code", true, "code", "")

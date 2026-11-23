@@ -36,7 +36,7 @@ export function EventDetail({ occ, onClose }: { occ: Occurrence; onClose: () => 
     <Modal title="" onClose={onClose} actions={editable ? <button className="btn sm" onClick={() => setEditing(true)}><Pencil size={14} /> Edit</button> : undefined}>
       <div>
         <div className="row small muted" style={{ fontWeight: 650 }}>
-          <Dot color={cal?.color ?? 'orange'} /> {cal?.name ?? 'Calendar'}
+          <Dot color={cal?.color ?? 'brown'} /> {cal?.name ?? 'Calendar'}
           {e.private && <Chip icon={<Lock size={11} />}>Private</Chip>}
           {e.source === 'ics' && <Chip icon={<LinkIcon size={11} />}>Subscribed</Chip>}
         </div>
@@ -53,7 +53,7 @@ export function EventDetail({ occ, onClose }: { occ: Occurrence; onClose: () => 
       )}
       {(e.location || e.url) && (
         <div className="group">
-          {e.location && <a className="item" href={`https://maps.apple.com/?q=${encodeURIComponent(e.location)}`} target="_blank" rel="noreferrer"><MapPin size={16} /> {e.location}</a>}
+          {e.location && <a className="item loc" href={`https://maps.apple.com/?q=${encodeURIComponent(e.location)}`} target="_blank" rel="noreferrer"><MapPin size={16} /> {e.location}</a>}
           {e.url && <a className="item" href={e.url} target="_blank" rel="noreferrer"><LinkIcon size={16} /> {safeHost(e.url)}</a>}
         </div>
       )}

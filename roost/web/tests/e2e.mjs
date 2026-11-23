@@ -58,6 +58,7 @@ try {
   await page.getByLabel('Your name').fill('Alex Rivera');
   await page.getByLabel('Email').fill('alex@example.com');
   await page.getByLabel('Password (8+ characters)').fill(PW);
+  await page.getByLabel('Setup code').fill('e2et-est1');
   await page.getByLabel('Family name').fill('The Riveras');
   await shot(page, '01-create-family');
   await page.getByRole('button', { name: 'Create family' }).click();

@@ -43,12 +43,17 @@ function CreateFamily({ back }: { back: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountDone, setAccountDone] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupCode, setSetupCode] = useState('');
+  useEffect(() => {
+    pb.send<{ setupCode?: boolean }>('/api/roost/config', {}).then((c) => setNeedsSetup(!!c.setupCode)).catch(() => undefined);
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      if (!accountDone) { await createAccount(name, email, password); setAccountDone(true); }
+      if (!accountDone) { await createAccount(name, email, password, needsSetup ? setupCode.trim() : undefined); setAccountDone(true); }
       await createFamily(family, localTZ());
     } catch (err) { setError(errorText(err)); } finally { setBusy(false); }
   }
@@ -61,9 +66,15 @@ function CreateFamily({ back }: { back: () => void }) {
           <Field label="Your name"><input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" /></Field>
           <Field label="Email"><input className="input" required type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></Field>
           <Field label="Password (8+ characters)"><input className="input" required minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
+          {needsSetup && (
+            <Field label="Setup code">
+              <input className="input" required placeholder="XXXX-XXXX" value={setupCode} onChange={(e) => setSetupCode(e.target.value)} autoComplete="off" autoCapitalize="characters" />
+              <span className="faint small">The first account on a new server needs the code printed in the Roost server log (for example <code>docker compose logs roost</code>).</span>
+            </Field>
+          )}
         </>
       )}
-      <Field label="Family name"><input className="input" required placeholder="e.g. The Fischers" value={family} onChange={(e) => setFamily(e.target.value)} /></Field>
+      <Field label="Family name"><input className="input" required placeholder="e.g. The Riveras" value={family} onChange={(e) => setFamily(e.target.value)} /></Field>
       <p className="faint small" style={{ margin: 0 }}>You'll be the owner. Invite your partner, nanny and grandparents next — each gets their own level of access. Time zone: {localTZ()}.</p>
       {error && <div className="err">{error}</div>}
       <button className="btn primary block" disabled={busy}>{busy ? 'Creating…' : 'Create family'}</button>

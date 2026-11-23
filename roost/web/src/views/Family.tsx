@@ -17,6 +17,26 @@ export function cardIcon(c: CardRec): LucideIcon {
   return ({ contact: Phone, medical: HeartPulse, school: GraduationCap, routine: Clock, home: House } as Record<string, LucideIcon>)[c.kind] ?? StickyNote;
 }
 
+/** Neutral icon badge — ember is reserved for actions, today and selection. */
+export function CardIcon({ card, size = 32 }: { card: CardRec; size?: number }) {
+  const Icon = cardIcon(card);
+  return <span className="card-ico" style={{ width: size, height: size }}><Icon size={size * 0.5} /></span>;
+}
+
+/** Card body for previews: drops unfilled "Label:" lines; phone numbers don't break at hyphens. */
+export function cardPreview(c: CardRec): string {
+  return c.body.split('\n').filter((l) => l.trim() && !/:\s*$/.test(l.trim())).join('\n')
+    .replace(/(\d)-(?=\d)/g, '$1\u2011');
+}
+
+function CallButton({ phone }: { phone: string }) {
+  return (
+    <a className="btn sm call" href={`tel:${phone.replace(/[^\d+]/g, '')}`} onClick={(e) => e.stopPropagation()} aria-label={`Call ${phone}`}>
+      <Phone size={14} /> Call
+    </a>
+  );
+}
+
 export function FamilyPage() {
   const s = useRoost();
   const tabs = [
@@ -69,12 +89,13 @@ function CareInfo() {
       {!cards.length && <div className="card"><Empty icon={<HeartPulse size={26} />} title="No care info yet">Emergency contacts, allergies, routines and Wi-Fi for sitters and grandparents.</Empty></div>}
       <div className="grid2">
         {cards.map((c) => {
-          const Icon = cardIcon(c);
+          const preview = cardPreview(c);
           return (
             <div key={c.id} className="card info-card" role="button" tabIndex={0} onClick={() => setOpen(c)}>
-              <div className="row"><Icon size={18} color="var(--accent)" /><b style={{ flex: 1 }}>{c.title}</b>{c.pinned && <Pin size={13} color="var(--ink3)" />}</div>
+              <div className="row"><CardIcon card={c} /><b style={{ flex: 1 }}>{c.title}</b>{c.pinned && <Pin size={13} color="var(--ink3)" />}</div>
               {member(c.aboutMember, s) && <div className="small muted">About {member(c.aboutMember, s)!.name}</div>}
-              <p>{c.body}</p>
+              {preview ? <p>{preview}</p> : <p className="faint">{isAdmin(s) ? 'Tap to fill in' : 'Nothing here yet'}</p>}
+              {c.phone && <CallButton phone={c.phone} />}
             </div>
           );
         })}
@@ -88,11 +109,10 @@ function CareInfo() {
 export function CardModal({ card, onClose, onEdit }: { card: CardRec; onClose: () => void; onEdit?: () => void }) {
   const s = useRoost();
   const c = s.cards.find((x) => x.id === card.id) ?? card;
-  const Icon = cardIcon(c);
   const canEdit = isAdmin(s) || (!!s.user && c.editors.includes(s.user.id));
   return (
     <Modal title="" onClose={onClose} actions={canEdit && onEdit ? <button className="btn sm" onClick={onEdit}>Edit</button> : undefined}>
-      <div><Icon size={26} color="var(--accent)" /><h2 style={{ fontSize: 24, marginTop: 6 }}>{c.title}</h2></div>
+      <div><CardIcon card={c} size={44} /><h2 style={{ fontSize: 24, marginTop: 6 }}>{c.title}</h2></div>
       {(c.phone || c.address) && (
         <div className="group">
           {c.phone && <a className="item" href={`tel:${c.phone.replace(/[^\d+]/g, '')}`}><Phone size={16} /> {c.phone}</a>}
@@ -196,7 +216,7 @@ function People() {
           <div className="row">
             <button className="btn sm" onClick={() => setEdit({
               id: newId(), family: s.family!.id, user: '', name: '', role: 'kid', color: COLORS[s.members.length % COLORS.length], emoji: '', birthday: '', notifyAll: false, sortOrder: s.members.length,
-            })}><Plus size={14} /> Profile (no login)</button>
+            })}><Plus size={14} /> Add child (no login)</button>
             <button className="btn primary sm" onClick={() => setInvite({})}><UserPlus size={14} /> Invite</button>
           </div>
         )}

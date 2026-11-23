@@ -154,6 +154,7 @@ struct CreateFamilyFlow: View {
     @State private var busy = false
     @State private var error: String?
     @State private var accountDone = false
+    @State private var setupCode = ""
 
     var body: some View {
         Form {
@@ -164,9 +165,16 @@ struct CreateFamilyFlow: View {
                     TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                     SecureField("Password (8+ characters)", text: $password).textContentType(.newPassword)
                 }
+                Section {
+                    TextField("Setup code (first account only)", text: $setupCode)
+                        .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                        .font(.system(.body, design: .monospaced))
+                } footer: {
+                    Text("A brand-new server asks for the code printed in its log. Leave this empty if your family already uses Roost on this server.")
+                }
             }
             Section {
-                TextField("e.g. The Fischers", text: $familyName)
+                TextField("e.g. The Riveras", text: $familyName)
                 Picker("Time zone", selection: $timezone) {
                     ForEach(TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") }, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
                 }
@@ -195,7 +203,8 @@ struct CreateFamilyFlow: View {
         defer { busy = false }
         do {
             if !accountDone {
-                try await app.createAccount(name: name, email: email, password: password, inviteCode: nil)
+                try await app.createAccount(name: name, email: email, password: password,
+                                            inviteCode: setupCode.trimmingCharacters(in: .whitespaces).isEmpty ? nil : setupCode)
                 accountDone = true
             }
             try await app.createFamily(name: familyName, timezone: timezone)

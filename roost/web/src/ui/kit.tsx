@@ -5,15 +5,19 @@ import type { Member } from '../data/models';
 import { COLORS } from '../data/models';
 import { useRoost } from '../data/store';
 
-export const colorVar = (name: string | undefined) => `var(--${COLORS.includes((name ?? '') as never) ? name : 'orange'})`;
-const darkText = (name?: string) => name === 'amber' || name === 'lime';
+export const colorVar = (name: string | undefined) => `var(--${COLORS.includes((name ?? '') as never) ? name : 'brown'})`;
+const known = (name?: string) => (COLORS.includes((name ?? '') as never) ? name! : 'brown');
+/** Solid fill for a person color when text/icons sit on it (darkened for contrast). */
+export const fillVar = (name: string | undefined) => `var(--${known(name)}-strong)`;
+/** Text color on fillVar(name): dark on amber/lime, white otherwise. */
+export const textOn = (name: string | undefined) => (known(name) === 'amber' || known(name) === 'lime' ? '#1E1A16' : '#fff');
 
 export function Avatar({ member, size = 28 }: { member: Member | null | undefined; size?: number }) {
   const initials = (member?.name ?? '?').split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   return (
     <span className="avatar" title={member?.name} aria-label={member?.name}
-      style={{ width: size, height: size, background: colorVar(member?.color), color: darkText(member?.color) ? '#1E1A16' : '#fff', fontSize: size * (member?.emoji ? 0.55 : 0.4) }}>
-      {member?.emoji || initials}
+      style={{ width: size, height: size, background: fillVar(member?.color), color: textOn(member?.color), fontSize: size * (member?.emoji ? 0.55 : size < 26 ? 0.48 : 0.4) }}>
+      {member?.emoji || (size < 26 ? initials.slice(0, 1) : initials)}
     </span>
   );
 }

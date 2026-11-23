@@ -19,7 +19,7 @@ const SMART: { key: Smart; title: string; icon: typeof Sun; color: string }[] = 
   { key: 'upcoming', title: 'Upcoming', icon: CalendarDays, color: 'violet' },
   { key: 'mine', title: 'Assigned to me', icon: User, color: 'green' },
   { key: 'overdue', title: 'Overdue', icon: CircleAlert, color: 'red' },
-  { key: 'flagged', title: 'Priority', icon: Flag, color: 'orange' },
+  { key: 'flagged', title: 'Priority', icon: Flag, color: 'red' },
 ];
 
 export const taskSort = (a: TaskRec, b: TaskRec) =>

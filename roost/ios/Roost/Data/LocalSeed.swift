@@ -22,7 +22,7 @@ enum LocalSeed {
 
         var groceries = TaskList(id: RecordID.make(), family: familyId, name: "Groceries", kind: .grocery, icon: "cart", color: "green")
         groceries.viewers = [userId]; groceries.editors = [userId]
-        var todo = TaskList(id: RecordID.make(), family: familyId, name: "To-Do", kind: .todo, icon: "checklist", color: "blue")
+        var todo = TaskList(id: RecordID.make(), family: familyId, name: "Household", kind: .todo, icon: "checklist", color: "blue")
         todo.viewers = [userId]; todo.editors = [userId]; todo.sortOrder = 1
         s.lists = [groceries, todo]
 
