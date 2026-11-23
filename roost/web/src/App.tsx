@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { CalendarDays, ListChecks, ShoppingCart, Sun, Users } from 'lucide-react';
-import { bootstrap, todayKey, useRoost } from './data/store';
+import { bootstrap, dismissRejected, expireSession, todayKey, useRoost } from './data/store';
 import { Logo, SyncBadge } from './ui/kit';
 import { Onboarding } from './views/Onboarding';
 import { Today } from './views/Today';
@@ -46,6 +46,43 @@ export function App() {
   );
 }
 
+/** One broken screen shouldn't take the whole app down. */
+class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card stack" style={{ maxWidth: 520 }}>
+        <b>Something went wrong showing this screen.</b>
+        <span className="muted small">{this.state.error.message}</span>
+        <button className="btn" onClick={() => this.setState({ error: null })}>Try again</button>
+      </div>
+    );
+  }
+}
+
+function Banners() {
+  const s = useRoost();
+  if (s.needsSignIn) {
+    return (
+      <div className="banner">
+        <span>Your sign-in expired.{s.outbox.length ? ` ${s.outbox.length} change${s.outbox.length === 1 ? ' is' : 's are'} saved here and will be sent when you sign back in.` : ''}</span>
+        <button className="btn sm primary" onClick={expireSession}>Sign in</button>
+      </div>
+    );
+  }
+  if (s.rejected.length) {
+    return (
+      <div className="banner warn">
+        <span>The server didn't accept {s.rejected[0].what}: {s.rejected[0].message}{s.rejected.length > 1 ? ` (+${s.rejected.length - 1} more)` : ''}</span>
+        <button className="btn sm" onClick={dismissRejected}>OK</button>
+      </div>
+    );
+  }
+  return null;
+}
+
 function Shell() {
   const s = useRoost();
   const [, tick] = useState(0);
@@ -72,6 +109,8 @@ function Shell() {
         <div style={{ padding: '0 12px' }}><SyncBadge /></div>
       </nav>
       <main className="main">
+        <Banners />
+        <Boundary>
         <Routes>
           <Route path="/" element={<Today />} />
           <Route path="/calendar" element={<CalendarPage />} />
@@ -81,6 +120,7 @@ function Shell() {
           <Route path="/family/*" element={<FamilyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Boundary>
       </main>
       <nav className="tabbar" aria-label="Tabs">
         {NAV.map(({ to, label, icon: Icon, end }) => (

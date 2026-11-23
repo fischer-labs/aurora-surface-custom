@@ -266,6 +266,28 @@ try {
   assert.ok(week.structuredContent.events.some((e) => e.title === 'Soccer practice'), 'MCP sees the expanded recurring event');
   log('an MCP assistant added groceries; they reached the nanny’s phone live');
 
+  // ---------------------------------------------------------------- edits (not just creates) reach the server
+  const eventually = async (what, fn) => {
+    for (let i = 0; i < 40; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 150)); }
+    throw new Error('timed out waiting for ' + what);
+  };
+  await page.getByRole('link', { name: 'Groceries' }).first().click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.locator('.menu-pop button', { hasText: 'List settings' }).click();
+  await page.getByPlaceholder('List name').fill('Weekly shop');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('heading', { name: 'Weekly shop' }).waitFor();
+  await eventually('list rename on server', async () => (await list('lists', owner, "kind = 'grocery'"))[0].name === 'Weekly shop');
+  await page.locator('.grow-item', { hasText: 'Sunscreen' }).locator('.name').click(); // tapping the row ticks it off
+  await eventually('row tap checks the item', async () => (await list('groceryItems', owner, "name = 'Sunscreen'"))[0].checked === true);
+  await page.getByRole('link', { name: 'Family' }).first().click();
+  await page.locator('.info-card', { hasText: 'Bedtime routine' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByPlaceholder('Title (e.g. Pediatrician)').fill('Bedtime routine (weeknights)');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await eventually('card edit on server', async () => (await list('infoCards', owner)).some((c) => c.title === 'Bedtime routine (weeknights)'));
+  log('edits to lists, items and care cards saved on the server');
+
   // ---------------------------------------------------------------- phone + dark mode screenshots for the owner
   const octx = await browser.newContext({ ...phone, colorScheme: 'dark' });
   const op = await octx.newPage();

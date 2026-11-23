@@ -294,10 +294,13 @@ textarea.input { resize: vertical; min-height: 80px; }
 .aisle h3 .n { color: var(--ink3); font-weight: 600; font-size: 12px; }
 .grow-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
 .grow-item + .grow-item { border-top: 1px solid var(--line); }
-.grow-item .name { flex: 1; min-width: 0; cursor: pointer; }
+.grow-item .name { flex: 1; min-width: 0; }
+.grow-item.tappable { cursor: pointer; }
+.grow-item.tappable:hover { background: var(--surface2); }
 .grow-item.done .name { color: var(--ink3); text-decoration: line-through; }
 .qty { font: 700 12px var(--font-round); background: var(--surface2); color: var(--ink2); border-radius: 999px; padding: 3px 9px; font-variant-numeric: tabular-nums; }
-.sugg { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.sugg { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.sugg-label { font-size: 12.5px; font-weight: 650; color: var(--ink2); margin-right: 2px; }
 .sugg button { border: 1px dashed var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--ink2); }
 .sugg button:hover { border-color: var(--accent); color: var(--accent); }
 .order-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
@@ -329,7 +332,7 @@ textarea.input { resize: vertical; min-height: 80px; }
   .only-desktop { display: none !important; }
   .only-mobile { display: inline-flex !important; }
   .calbar { gap: 6px; }
-  .calbar h1 { font-size: 20px; min-width: 0; flex: 1 1 100%; }
+  .calbar h1 { font-size: 20px; min-width: 0; flex: 1 1 auto; }
   .irow { padding: 10px 12px; gap: 10px; }
   .irow .when { width: 64px; }
   .irow .when b { font-size: 13px; }
@@ -356,3 +359,7 @@ textarea.input { resize: vertical; min-height: 80px; }
   .btn.icon { min-width: 44px; }
   .btn.sm, .seg button { min-height: 40px; }
 }
+
+/* Session / sync banners */
+.banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 14px; margin-bottom: 14px; border-radius: var(--r); background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.banner.warn { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }

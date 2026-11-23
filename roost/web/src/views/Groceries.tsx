@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronDown, ChevronRight, Copy, Ellipsis, Plus, RotateCcw, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, ChevronDown, ChevronRight, Copy, Ellipsis, Plus, RotateCcw, ShoppingBasket, Sparkles, Trash2 } from 'lucide-react';
 import {
   addGroceries, canEditList, clearChecked, deleteGrocery, isAdmin, liveLists, me, orderedCategories, saveGrocery, saveList, setGroceryCategory,
   suggestions, toggleGrocery, useRoost,
@@ -94,12 +94,13 @@ function GroceryList({ list }: { list: ListRec }) {
             <textarea rows={1} value={text} onChange={(e) => setText(e.target.value)} aria-label="Add grocery items"
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); } }}
               onPaste={(e) => { const t = e.clipboardData.getData('text'); if (t.includes('\n')) { e.preventDefault(); addGroceries(t, list.id); } }}
-              placeholder="Add items — “2 lb chicken, milk x2, eggs” (paste a whole list!)" />
-            <button className="btn primary sm" onClick={add} disabled={!text.trim()}>Add</button>
+              placeholder="Add groceries…" />
+            {text.trim() && <button className="btn primary sm" onClick={add}>Add</button>}
           </div>
-          {preview && <div className="hint">{preview}</div>}
+          {preview ? <div className="hint">{preview}</div> : <div className="hint faint">Type several at once — 2 lb chicken, milk x2 — or paste a whole list.</div>}
           {!text && sugg.length > 0 && (
             <div className="sugg" aria-label="Buy again">
+              <span className="sugg-label">Buy again</span>
               {sugg.map((x) => <button key={x} onClick={() => addGroceries(x, list.id)}><RotateCcw size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{x}</button>)}
             </div>
           )}
@@ -133,19 +134,22 @@ function GroceryList({ list }: { list: ListRec }) {
 function Row({ g, editable, onEdit }: { g: GroceryRec; editable: boolean; onEdit: () => void }) {
   const q = formatQuantity(g.quantity, g.unit);
   return (
-    <div className={`grow-item${g.checked ? ' done' : ''}`}>
-      <button className={`check green${g.checked ? ' on' : ''}`} disabled={!editable} onClick={() => toggleGrocery(g)} aria-label={g.checked ? 'Put back' : 'Got it'}>
+    // In the store, tapping anywhere on the row ticks the item off; editing lives in the ⋯ menu.
+    <div className={`grow-item${g.checked ? ' done' : ''}${editable ? ' tappable' : ''}`} onClick={() => editable && toggleGrocery(g)}>
+      <button className={`check green${g.checked ? ' on' : ''}`} disabled={!editable} onClick={(e) => { e.stopPropagation(); toggleGrocery(g); }} aria-label={g.checked ? 'Put back' : 'Got it'}>
         {g.checked && <Check size={14} strokeWidth={3} />}
       </button>
-      <div className="name" onClick={() => editable && onEdit()} role="button" tabIndex={0}>
+      <div className="name">
         {g.name} {g.categorySource === 'ai' && <Sparkles size={12} color="var(--accent)" aria-label="Sorted by AI" />}
         {g.note && <div className="small muted">{g.note}</div>}
       </div>
       {q && <span className="qty">{q}</span>}
       {editable && (
-        <Menu trigger={(t) => <button className="btn ghost icon" onClick={t} aria-label={`Move ${g.name}`}><ArrowUpDown size={15} /></button>}>
+        <span onClick={(e) => e.stopPropagation()}><Menu trigger={(t) => <button className="btn ghost icon" onClick={t} aria-label={`More for ${g.name}`}><Ellipsis size={16} /></button>}>
           {(close) => (
             <div style={{ maxHeight: 320, overflow: 'auto' }}>
+              <button onClick={() => { close(); onEdit(); }}><Pencil size={15} /> Edit…</button>
+              <hr />
               <div className="label">Move to aisle</div>
               {taxonomy.categories.map((c: GroceryCategory) => (
                 <button key={c.key} className={g.category === c.key ? 'on' : ''} onClick={() => { close(); setGroceryCategory(g, c.key); }}>{c.emoji} {c.name}</button>
@@ -154,7 +158,7 @@ function Row({ g, editable, onEdit }: { g: GroceryRec; editable: boolean; onEdit
               <button onClick={() => { close(); deleteGrocery(g); }}><Trash2 size={15} /> Delete</button>
             </div>
           )}
-        </Menu>
+        </Menu></span>
       )}
     </div>
   );

@@ -21,7 +21,7 @@ export function resolveMembers(names: string[], s: State): Member[] {
   });
 }
 
-export function QuickAdd({ mode: initial, onClose, defaultList }: { mode: QuickAddMode; onClose: () => void; defaultList?: string }) {
+export function QuickAdd({ mode: initial, onClose, defaultList, onMore }: { mode: QuickAddMode; onClose: () => void; defaultList?: string; onMore?: () => void }) {
   const s = useRoost();
   const [mode, setMode] = useState<QuickAddMode>(initial);
   const [text, setText] = useState('');
@@ -74,7 +74,7 @@ export function QuickAdd({ mode: initial, onClose, defaultList }: { mode: QuickA
           {people.map((m) => <Chip key={m.id} color={m.color} icon={<User size={12} />}>{m.name}</Chip>)}
           {driver && <Chip color={driver.color} icon={<Car size={12} />}>{driver.name}</Chip>}
           {p.tag && <Chip icon={<Hash size={12} />}>{p.tag}</Chip>}
-          {p.priority > 0 && <Chip color="orange" icon={<Flag size={12} />}>{'!'.repeat(p.priority)}</Chip>}
+          {p.priority > 0 && <Chip color="red" icon={<Flag size={12} />}>{'!'.repeat(p.priority)}</Chip>}
           {p.reminders.map((r) => <Chip key={r} icon={<Bell size={12} />}>{reminderText(r, false)}</Chip>)}
         </div>
       )}
@@ -85,6 +85,7 @@ export function QuickAdd({ mode: initial, onClose, defaultList }: { mode: QuickA
         ))}
         <span className="faint small">@name assigns · driver:Name · #List or #Calendar · ! to !!! priority · “remind 30m”</span>
       </div>
+      {onMore && mode === 'event' && <button className="btn ghost sm" onClick={onMore}>More options…</button>}
     </Modal>
   );
 }

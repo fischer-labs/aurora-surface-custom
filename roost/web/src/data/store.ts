@@ -40,13 +40,17 @@ export interface State {
   invites: InviteRec[];
   feeds: FeedRec[];
   outbox: Op[];
+  /** Changes the server refused (shown in Settings, newest first). */
+  rejected: { id: string; what: string; message: string; at: string }[];
+  /** The session expired: unsent changes are kept until the same person signs in again. */
+  needsSignIn: boolean;
   sync: SyncState;
   lastSync: string | null;
 }
 
 const empty: State = {
   phase: 'loading', user: null, family: null, members: [], calendars: [], events: [], busy: [], lists: [], tasks: [], grocery: [],
-  learned: [], cards: [], invites: [], feeds: [], outbox: [], sync: 'idle', lastSync: null,
+  learned: [], cards: [], invites: [], feeds: [], outbox: [], rejected: [], needsSignIn: false, sync: 'idle', lastSync: null,
 };
 
 let state: State = empty;
@@ -54,6 +58,7 @@ const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
+  if (patch.outbox) saveOutbox();
   scheduleSave();
 }
 export function getState(): State { return state; }
@@ -64,19 +69,43 @@ export function useRoost(): State {
 // ---- persistence ---------------------------------------------------------
 
 const snapKey = (fam: string) => `roost.snapshot.${fam}`;
+const outboxKey = (fam: string) => `roost.outbox.${fam}`;
 let saveTimer: number | undefined;
 function scheduleSave() {
   if (!state.family) return;
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     if (!state.family) return;
-    const { phase: _p, sync: _s, ...rest } = state;
-    try { localStorage.setItem(snapKey(state.family.id), JSON.stringify(rest)); } catch { /* storage full or blocked */ }
+    const { phase: _p, sync: _s, needsSignIn: _n, outbox: _o, ...rest } = state;
+    try { localStorage.setItem(snapKey(state.family.id), JSON.stringify(rest)); } catch {
+      // Over quota (big subscriptions): keep a smaller snapshot without other people's busy blocks and old events.
+      try {
+        const cutoff = Date.now() - 31 * 86400000;
+        const events = rest.events.filter((e) => e.rrule || (pbDate(e.end)?.getTime() ?? 0) > cutoff);
+        localStorage.setItem(snapKey(state.family.id), JSON.stringify({ ...rest, busy: [], events }));
+      } catch { /* the outbox is stored separately, so no change is lost */ }
+    }
     planReminders();
   }, 500);
 }
-function loadSnapshot(fam: string): Partial<State> | null {
-  try { const raw = localStorage.getItem(snapKey(fam)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+/** Unsent changes are small and precious: write them synchronously, separately from the snapshot. */
+function saveOutbox() {
+  if (!state.family) return;
+  try {
+    localStorage.setItem(outboxKey(state.family.id), JSON.stringify({ user: state.user?.id ?? '', ops: state.outbox }));
+  } catch { /* blocked storage: nothing more we can do */ }
+}
+function loadSnapshot(fam: string, userId?: string): Partial<State> | null {
+  let snap: Partial<State> | null = null;
+  try { const raw = localStorage.getItem(snapKey(fam)); snap = raw ? JSON.parse(raw) : null; } catch { snap = null; }
+  let outbox: Op[] = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(outboxKey(fam)) ?? 'null') as { user: string; ops: Op[] } | null;
+    // Only replay changes made by the person signing in now.
+    if (raw && Array.isArray(raw.ops) && (!userId || raw.user === userId)) outbox = raw.ops;
+  } catch { /* ignore */ }
+  if (!snap && !outbox.length) return null;
+  return { ...(snap ?? {}), outbox };
 }
 
 // ---- derived helpers -----------------------------------------------------
@@ -133,11 +162,17 @@ export function expandEvents(events: EventRec[], from: Date, to: Date): Occurren
     if (!start) continue;
     const tz = validTZ(e.tz);
     const dur = durationMinutes(e);
-    const starts = expand({ start: LocalDateTime.fromDate(start, tz), durationMinutes: dur, allDay: e.allDay, tz, rrule: e.rrule || null,
-      exdates: new Set(e.exdates ?? []), rangeStart: from, rangeEnd: to });
+    // All-day events are floating dates: Dec 4 is Dec 4 for a grandparent in another time zone too.
+    const viewTz = e.allDay ? localTZ() : tz;
+    const exdates = new Set(Array.isArray(e.exdates) ? e.exdates.filter((x) => typeof x === 'string') : []);
+    let starts: LocalDateTime[] = [];
+    try {
+      starts = expand({ start: LocalDateTime.fromDate(start, tz), durationMinutes: dur, allDay: e.allDay, tz: viewTz, rrule: e.rrule || null,
+        exdates, rangeStart: from, rangeEnd: to });
+    } catch { continue; } // one malformed event must not break the calendar for everyone
     for (const s of starts) {
-      const sd = s.toDate(tz);
-      const ed = e.allDay ? s.addMinutes(dur).toDate(tz) : new Date(sd.getTime() + dur * 60000);
+      const sd = s.toDate(viewTz);
+      const ed = e.allDay ? s.addMinutes(dur).toDate(viewTz) : new Date(sd.getTime() + dur * 60000);
       const key = s.key(e.allDay);
       out.push({ id: `${e.id}|${key}`, event: e, start: sd, end: ed, key });
     }
@@ -169,41 +204,99 @@ function removeRecord(coll: Coll, id: string) {
   set({ [k]: (state[k] as { id: string }[]).filter((x) => x.id !== id) } as Partial<State>);
 }
 
+/** Records changed locally (or by our own writes) since a given time, so a sync in flight can't overwrite them. */
+const touched = new Map<string, number>();
+const touch = (id: string) => touched.set(id, Date.now());
+
+let inFlight: string | null = null;
 function enqueue(coll: Coll, recordId: string, kind: Op['kind'], body: Record<string, unknown>) {
+  touch(recordId);
   const outbox = [...state.outbox];
-  const i = kind === 'update' ? outbox.map((o) => o.recordId === recordId && o.coll === coll && o.kind !== 'delete').lastIndexOf(true) : -1;
+  // Fold into the latest queued op for this record — but never into the one being sent right now.
+  let i = -1;
+  if (kind === 'update') {
+    for (let j = outbox.length - 1; j >= 0; j--) {
+      const o = outbox[j];
+      if (o.coll === coll && o.recordId === recordId) { if (o.kind !== 'delete' && o.id !== inFlight) i = j; break; }
+    }
+  }
   if (i >= 0) outbox[i] = { ...outbox[i], body: { ...outbox[i].body, ...body } };
   else outbox.push({ id: newId(), coll, recordId, kind, body });
   set({ outbox });
   void flush();
 }
 
-function isOffline(e: unknown) { return e instanceof ClientResponseError ? e.status === 0 : true; }
+/** Server answers that mean "this change will never be accepted". Everything else is retried. */
+const definitive = (status: number) => status === 400 || status === 403 || status === 404 || status === 413 || status === 422;
+function isOffline(e: unknown) { return !(e instanceof ClientResponseError) || !definitive(e.status); }
+let retryTimer: number | undefined;
+let backoff = 2000;
+function scheduleRetry() {
+  window.clearTimeout(retryTimer);
+  retryTimer = window.setTimeout(() => void flush(), backoff);
+  backoff = Math.min(backoff * 2, 60000);
+}
+const describeOp = (op: Op) => {
+  const name = (op.body.title ?? op.body.name) as string | undefined;
+  const noun = ({ events: 'event', tasks: 'to-do', groceryItems: 'grocery item', lists: 'list', calendars: 'calendar', infoCards: 'card', memberships: 'person' } as Record<string, string>)[op.coll] ?? 'change';
+  return name ? `${noun} “${name}”` : `a ${noun} change`;
+};
+
+/** Re-applies changes still queued for a record on top of what the server returned. */
+function withPending(coll: Coll, rec: Record<string, unknown> & { id: string }) {
+  let out = rec;
+  for (const o of state.outbox) if (o.coll === coll && o.recordId === rec.id && o.kind !== 'delete') out = { ...out, ...o.body };
+  return out;
+}
 
 export async function flush() {
-  if (flushing || !pb.authStore.isValid) return;
+  if (flushing || !pb.authStore.isValid || state.needsSignIn) return;
   flushing = true;
   try {
     while (state.outbox.length) {
       const op = state.outbox[0];
+      inFlight = op.id;
       try {
+        let rec: Record<string, unknown> & { id: string } | null = null;
         if (op.kind === 'create') {
-          try { applyRecord(op.coll, await pb.collection(op.coll).create({ ...op.body, id: op.recordId })); }
+          try { rec = await pb.collection(op.coll).create({ ...op.body, id: op.recordId }); }
           catch (e) {
-            if (e instanceof ClientResponseError && e.status === 400 && e.response?.data?.id) applyRecord(op.coll, await pb.collection(op.coll).update(op.recordId, op.body));
+            // Already created (a retry after a lost response): turn it into an update.
+            if (e instanceof ClientResponseError && e.status === 400 && e.response?.data?.id) rec = await pb.collection(op.coll).update(op.recordId, op.body);
             else throw e;
           }
-        } else if (op.kind === 'update') applyRecord(op.coll, await pb.collection(op.coll).update(op.recordId, op.body));
+        } else if (op.kind === 'update') rec = await pb.collection(op.coll).update(op.recordId, op.body);
         else await pb.collection(op.coll).delete(op.recordId);
-        set({ outbox: state.outbox.slice(1), sync: state.sync === 'offline' ? 'idle' : state.sync });
+        inFlight = null;
+        set({ outbox: state.outbox.filter((o) => o.id !== op.id), sync: state.sync === 'offline' ? 'idle' : state.sync });
+        if (rec) { touch(rec.id); applyRecord(op.coll, withPending(op.coll, rec)); }
+        backoff = 2000;
       } catch (e) {
-        if (isOffline(e)) { set({ sync: 'offline' }); return; }
-        set({ outbox: state.outbox.slice(1), sync: { error: (e as ClientResponseError).message || 'A change was rejected.' } });
-        void syncNow();
+        inFlight = null;
+        const status = e instanceof ClientResponseError ? e.status : 0;
+        if (status === 401) {
+          // The session ran out. Try to renew it; if that fails, keep every change and ask to sign in.
+          try { await pb.collection('users').authRefresh(); continue; } catch { set({ needsSignIn: true, sync: { error: 'Please sign in again to send your changes.' } }); return; }
+        }
+        if (!definitive(status)) { set({ sync: 'offline' }); scheduleRetry(); return; }
+        const message = (e as ClientResponseError).message || 'The server refused this change.';
+        set({
+          outbox: state.outbox.filter((o) => o.id !== op.id),
+          rejected: [{ id: op.id, what: describeOp(op), message, at: new Date().toISOString() }, ...state.rejected].slice(0, 20),
+          sync: { error: `Couldn't save ${describeOp(op)}: ${message}` },
+        });
+        // Put the record back the way the server has it (unless more changes for it are queued).
+        if (!state.outbox.some((o) => o.recordId === op.recordId)) {
+          touched.delete(op.recordId);
+          pb.collection(op.coll).getOne(op.recordId).then((r) => applyRecord(op.coll, r)).catch((err) => {
+            if (err instanceof ClientResponseError && err.status === 404 && op.kind === 'create') removeRecord(op.coll, op.recordId);
+          });
+        }
       }
     }
-  } finally { flushing = false; }
+  } finally { inFlight = null; flushing = false; }
 }
+export const dismissRejected = () => set({ rejected: [], sync: state.outbox.length ? 'offline' : 'idle' });
 window.addEventListener('online', () => { void flush(); void syncNow(); });
 
 // ---- session -------------------------------------------------------------
@@ -213,18 +306,37 @@ export async function bootstrap() {
   const user = pb.authStore.record as unknown as UserRec;
   const famId = localStorage.getItem('roost.familyId');
   if (famId) {
-    const snap = loadSnapshot(famId);
+    const snap = loadSnapshot(famId, user.id);
     if (snap?.family) set({ ...snap, user, phase: 'ready', sync: 'syncing' } as Partial<State>);
   }
   try {
     await pb.collection('users').authRefresh();
+    lastAuthRefresh = Date.now();
     set({ user: pb.authStore.record as unknown as UserRec });
     await openFirstFamily();
   } catch (e) {
-    if (e instanceof ClientResponseError && e.status === 401) { signOut(); return; }
+    if (e instanceof ClientResponseError && e.status === 401) { expireSession(); return; }
     if (!state.family) set({ phase: 'onboarding' });
     else set({ sync: 'offline' });
   }
+}
+
+/** The login expired: go to sign-in but keep the snapshot and unsent changes for when this person signs back in. */
+export function expireSession() {
+  stopRealtime();
+  saveOutbox();
+  pb.authStore.clear();
+  state = { ...empty, phase: 'onboarding' };
+  listeners.forEach((l) => l());
+}
+
+/** Someone removed us from the family: forget everything we cached about it. */
+function leaveFamily(famId: string) {
+  stopRealtime();
+  try { localStorage.removeItem(snapKey(famId)); localStorage.removeItem(outboxKey(famId)); } catch { /* ignore */ }
+  if (localStorage.getItem('roost.familyId') === famId) localStorage.removeItem('roost.familyId');
+  state = { ...empty, user: state.user, phase: 'onboarding' };
+  listeners.forEach((l) => l());
 }
 
 async function openFirstFamily() {
@@ -232,9 +344,9 @@ async function openFirstFamily() {
   if (!fams.length) { set({ phase: 'onboarding', family: null }); return; }
   const fam = fams.find((f) => f.id === localStorage.getItem('roost.familyId')) ?? fams[0];
   if (state.family?.id !== fam.id) {
-    const snap = loadSnapshot(fam.id);
-    set({ ...(snap ?? {}), family: fam, phase: 'ready' } as Partial<State>);
-  } else set({ family: fam, phase: 'ready' });
+    const snap = loadSnapshot(fam.id, pb.authStore.record?.id);
+    set({ ...(snap ?? {}), family: fam, phase: 'ready', needsSignIn: false } as Partial<State>);
+  } else set({ family: fam, phase: 'ready', needsSignIn: false });
   localStorage.setItem('roost.familyId', fam.id);
   await syncNow();
   startRealtime();
@@ -271,7 +383,7 @@ export async function joinFamily(code: string, name?: string) {
 
 export function signOut() {
   stopRealtime();
-  if (state.family) try { localStorage.removeItem(snapKey(state.family.id)); } catch { /* ignore */ }
+  if (state.family) try { localStorage.removeItem(snapKey(state.family.id)); localStorage.removeItem(outboxKey(state.family.id)); } catch { /* ignore */ }
   localStorage.removeItem('roost.familyId');
   pb.authStore.clear();
   state = { ...empty, phase: 'onboarding' };
@@ -280,11 +392,13 @@ export function signOut() {
 
 // ---- sync ----------------------------------------------------------------
 
+let syncStartedAt = 0;
 function keepPending<T extends { id: string }>(local: T[], server: T[]): T[] {
   const pending = new Set(state.outbox.map((o) => o.recordId));
   const out = [...server];
   for (const l of local) {
-    if (!pending.has(l.id)) continue;
+    // Queued, or changed (by us or by realtime) after this sync started: the local copy is newer.
+    if (!pending.has(l.id) && (touched.get(l.id) ?? 0) < syncStartedAt) continue;
     const i = out.findIndex((x) => x.id === l.id);
     if (i >= 0) out[i] = l; else out.push(l);
   }
@@ -292,6 +406,7 @@ function keepPending<T extends { id: string }>(local: T[], server: T[]): T[] {
 }
 
 let syncing: Promise<void> | null = null;
+let lastAuthRefresh = 0;
 export function syncNow(): Promise<void> {
   if (syncing) return syncing;
   syncing = doSync().finally(() => { syncing = null; });
@@ -300,10 +415,18 @@ export function syncNow(): Promise<void> {
 
 async function doSync() {
   const fam = state.family;
-  if (!fam || !pb.authStore.isValid) return;
+  if (!fam || !pb.authStore.isValid || state.needsSignIn) return;
   set({ sync: 'syncing' });
+  // Renew the login now and then so a tab or phone left open for days doesn't lose its session.
+  if (Date.now() - lastAuthRefresh > 6 * 3600000) {
+    try { await pb.collection('users').authRefresh(); lastAuthRefresh = Date.now(); }
+    catch (e) { if (e instanceof ClientResponseError && e.status === 401) { set({ needsSignIn: true, sync: { error: 'Please sign in again.' } }); return; } }
+  }
   await flush();
+  syncStartedAt = Date.now();
   try {
+    const gone = await pb.collection('families').getOne<Family>(fam.id).then(() => false).catch((e) => e instanceof ClientResponseError && (e.status === 404 || e.status === 403));
+    if (gone) { leaveFamily(fam.id); return; }
     const f = pb.filter('family = {:f}', { f: fam.id });
     const live = f + ' && deleted = false';
     const opts = (filter: string) => ({ filter, requestKey: null });
@@ -343,7 +466,8 @@ function startRealtime() {
     pb.collection(coll).subscribe('*', (ev) => {
       const rec = ev.record as unknown as Record<string, unknown> & { id: string; family?: string };
       if (rec.family && rec.family !== state.family?.id) return;
-      if (ev.action === 'delete') removeRecord(coll, rec.id); else applyRecord(coll, rec);
+      touch(rec.id);
+      if (ev.action === 'delete') removeRecord(coll, rec.id); else applyRecord(coll, withPending(coll, rec));
       if (coll === 'memberships' || coll === 'calendars' || coll === 'lists') {
         window.clearTimeout(resyncTimer);
         resyncTimer = window.setTimeout(() => void syncNow(), 400);
@@ -351,7 +475,12 @@ function startRealtime() {
     }).then((u) => unsubs.push(u)).catch(() => undefined);
   }
   pb.realtime.onDisconnect = () => set({ sync: 'offline' });
+  // PB_CONNECT fires on every (re)connect: catch up on anything missed while disconnected.
+  let first = true;
+  pb.realtime.subscribe('PB_CONNECT', () => { if (!first) void syncNow(); first = false; }).then((u) => unsubs.push(u)).catch(() => undefined);
 }
+// A wall-mounted kitchen screen stays fresh even if realtime silently stalls.
+window.setInterval(() => { if (document.visibilityState === 'visible' && state.family && !syncing) void syncNow(); }, 5 * 60000);
 function stopRealtime() {
   unsubs.forEach((u) => u());
   unsubs = [];
@@ -371,6 +500,22 @@ export function newEvent(start: Date, allDay = false, calendarId?: string): Even
   };
 }
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** Only the fields that changed, so a stale copy can't overwrite someone else's newer edits. */
+function changed(prev: Record<string, unknown>, next: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(next)) if (!same(prev[k], next[k])) out[k] = next[k];
+  return out;
+}
+type Keyed = 'events' | 'tasks' | 'grocery' | 'lists' | 'calendars' | 'cards' | 'members';
+function commit<T extends { id: string }>(coll: Coll, key: Keyed, rec: T, body: (r: T) => Record<string, unknown>, createExtra: Record<string, unknown> = {}) {
+  const prev = (state[key] as unknown as T[]).find((x) => x.id === rec.id);
+  put(key, rec as never);
+  if (!prev) { enqueue(coll, rec.id, 'create', { ...body(rec), ...createExtra }); return; }
+  const d = changed(body(prev), body(rec));
+  if (Object.keys(d).length) enqueue(coll, rec.id, 'update', d);
+}
+
 const eventBody = (e: EventRec) => ({
   calendar: e.calendar, title: e.title, notes: e.notes, location: e.location, url: e.url, start: e.start, end: e.end, allDay: e.allDay,
   tz: e.tz, rrule: e.rrule, exdates: e.exdates ?? [], recurrenceParent: e.recurrenceParent, members: e.members, driver: e.driver,
@@ -378,14 +523,16 @@ const eventBody = (e: EventRec) => ({
 });
 
 export function saveEvent(e: EventRec) {
-  const isNew = !state.events.some((x) => x.id === e.id);
-  const rec = { ...e, family: state.family?.id ?? e.family, updated: new Date().toISOString() };
-  put('events', rec);
-  enqueue('events', e.id, isNew ? 'create' : 'update', eventBody(rec));
+  commit('events', 'events', { ...e, family: state.family?.id ?? e.family, updated: new Date().toISOString() }, eventBody);
 }
 export function deleteEvent(e: EventRec) {
   put('events', { ...e, deleted: true });
   enqueue('events', e.id, 'update', { deleted: true });
+  // Occurrences edited on their own belong to the series and go with it.
+  for (const c of state.events.filter((x) => x.recurrenceParent === e.id && !x.deleted)) {
+    put('events', { ...c, deleted: true });
+    enqueue('events', c.id, 'update', { deleted: true });
+  }
 }
 export function deleteOccurrence(o: Occurrence) {
   const m = state.events.find((x) => x.id === o.event.id);
@@ -409,9 +556,44 @@ export function saveOccurrenceEdit(o: Occurrence, edited: EventRec) {
   deleteOccurrence(o);
   saveEvent({ ...edited, id: newId(), rrule: '', exdates: [], recurrenceParent: o.event.id });
 }
+/** Wall-clock minutes between two instants as seen in tz (so DST doesn't skew a shift). */
+function wallDelta(from: Date, to: Date, tz: string) {
+  return LocalDateTime.fromDate(to, tz).minuteNumber - LocalDateTime.fromDate(from, tz).minuteNumber;
+}
+function shiftKey(key: string, minutes: number, allDay: boolean): string | null {
+  const k = LocalDateTime.parse(key);
+  return k ? k.addMinutes(minutes).key(allDay) : null;
+}
+/** "Save for all events": move the series by the same wall-clock shift and keep its skipped dates skipped. */
+export function saveSeriesEdit(o: Occurrence, edited: EventRec) {
+  const master = state.events.find((x) => x.id === o.event.id);
+  if (!master) return;
+  const tz = validTZ(master.tz);
+  const newStart = pbDate(edited.start)!, newEnd = pbDate(edited.end)!;
+  const delta = wallDelta(o.start, newStart, tz);
+  const ms = LocalDateTime.fromDate(pbDate(master.start)!, tz).addMinutes(delta).toDate(tz);
+  const dur = newEnd.getTime() - newStart.getTime();
+  const exdates = (master.exdates ?? []).map((k) => shiftKey(k, delta, edited.allDay)).filter((k): k is string => !!k);
+  saveEvent({ ...edited, id: master.id, start: toPB(ms), end: toPB(new Date(ms.getTime() + dur)), exdates });
+}
+/** "Save for future events": end the old series the day before and start a new one that keeps the later skips (and COUNT). */
 export function saveFollowingEdit(o: Occurrence, edited: EventRec) {
+  const master = state.events.find((x) => x.id === o.event.id);
+  if (!master) return;
+  const tz = validTZ(master.tz);
+  const delta = wallDelta(o.start, pbDate(edited.start)!, tz);
+  const exdates = (master.exdates ?? []).filter((k) => k >= o.key).map((k) => shiftKey(k, delta, edited.allDay)).filter((k): k is string => !!k);
+  let rrule = edited.rrule;
+  const oldRule = RRule.parse(master.rrule), newRule = RRule.parse(edited.rrule);
+  if (oldRule?.count !== undefined && newRule) {
+    // Occurrences already used up before the split come off the count.
+    const before = expand({ start: LocalDateTime.fromDate(pbDate(master.start)!, tz), durationMinutes: durationMinutes(master), allDay: master.allDay, tz,
+      rrule: master.rrule, exdates: new Set(), rangeStart: pbDate(master.start)!, rangeEnd: o.start }).filter((x) => x.key(master.allDay) < o.key).length;
+    newRule.count = Math.max(1, oldRule.count - before);
+    rrule = newRule.toString();
+  }
   endSeries(o);
-  saveEvent({ ...edited, id: newId(), exdates: [] });
+  saveEvent({ ...edited, id: newId(), rrule, exdates, recurrenceParent: '' });
 }
 
 // ---- tasks ---------------------------------------------------------------
@@ -428,9 +610,7 @@ const taskBody = (t: TaskRec) => ({
   completedAt: t.completedAt, parent: t.parent, reminders: t.reminders ?? [], tags: t.tags ?? [], sortOrder: t.sortOrder, deleted: t.deleted,
 });
 export function saveTask(t: TaskRec) {
-  const isNew = !state.tasks.some((x) => x.id === t.id);
-  put('tasks', { ...t, family: state.family?.id ?? t.family, updated: new Date().toISOString() });
-  enqueue('tasks', t.id, isNew ? 'create' : 'update', taskBody(t));
+  commit('tasks', 'tasks', { ...t, family: state.family?.id ?? t.family, updated: new Date().toISOString() }, taskBody);
 }
 export function toggleTask(t0: TaskRec) {
   const t = state.tasks.find((x) => x.id === t0.id) ?? t0;
@@ -456,9 +636,7 @@ const groceryBody = (g: GroceryRec) => ({
   categorySource: g.categorySource || 'none', checked: g.checked, sortOrder: g.sortOrder, deleted: g.deleted,
 });
 export function saveGrocery(g: GroceryRec) {
-  const isNew = !state.grocery.some((x) => x.id === g.id);
-  put('grocery', { ...g, family: state.family?.id ?? g.family, updated: new Date().toISOString() });
-  enqueue('groceryItems', g.id, isNew ? 'create' : 'update', groceryBody(g));
+  commit('groceryItems', 'grocery', { ...g, family: state.family?.id ?? g.family, updated: new Date().toISOString() }, groceryBody);
 }
 export function addGroceries(text: string, list: string) {
   const learned = learnedMap();
@@ -526,36 +704,31 @@ export function orderedCategories(l: ListRec): GroceryCategory[] {
 
 // ---- lists, calendars, cards, people -------------------------------------
 
+// `family` goes only on create; updates send just the changed fields.
 export function saveList(l: ListRec) {
-  const isNew = !state.lists.some((x) => x.id === l.id);
-  put('lists', l);
-  enqueue('lists', l.id, isNew ? 'create' : 'update', {
-    family: state.family?.id, name: l.name, kind: l.kind, icon: l.icon, color: l.color, owner: l.owner, sharing: l.sharing,
-    storeOrder: l.storeOrder ?? [], sortOrder: l.sortOrder, archived: l.archived, deleted: l.deleted,
-  });
+  commit('lists', 'lists', l, (x) => ({
+    name: x.name, kind: x.kind, icon: x.icon, color: x.color, owner: x.owner, sharing: x.sharing,
+    storeOrder: x.storeOrder ?? [], sortOrder: x.sortOrder, archived: x.archived, deleted: x.deleted,
+  }), { family: state.family?.id });
 }
 export function saveCalendar(c: CalendarRec) {
-  const isNew = !state.calendars.some((x) => x.id === c.id);
-  put('calendars', c);
-  enqueue('calendars', c.id, isNew ? 'create' : 'update', {
-    family: state.family?.id, name: c.name, color: c.color, kind: c.kind, owner: c.owner, sharing: c.sharing,
-    defaultReminders: c.defaultReminders ?? [], sourceUrl: c.sourceUrl, sortOrder: c.sortOrder, deleted: c.deleted,
-  });
+  commit('calendars', 'calendars', c, (x) => ({
+    name: x.name, color: x.color, kind: x.kind, owner: x.owner, sharing: x.sharing,
+    defaultReminders: x.defaultReminders ?? [], ...(x.sourceUrl !== undefined ? { sourceUrl: x.sourceUrl } : {}), sortOrder: x.sortOrder, deleted: x.deleted,
+  }), { family: state.family?.id });
 }
 export function saveCard(c: CardRec) {
-  const isNew = !state.cards.some((x) => x.id === c.id);
-  put('cards', c);
-  enqueue('infoCards', c.id, isNew ? 'create' : 'update', {
-    family: state.family?.id, title: c.title, body: c.body, kind: c.kind || 'note', icon: c.icon, phone: c.phone, address: c.address,
-    aboutMember: c.aboutMember, pinned: c.pinned, sharing: c.sharing, sortOrder: c.sortOrder, deleted: c.deleted,
-  });
+  commit('infoCards', 'cards', c, (x) => ({
+    title: x.title, body: x.body, kind: x.kind || 'note', icon: x.icon, phone: x.phone, address: x.address,
+    aboutMember: x.aboutMember, pinned: x.pinned, sharing: x.sharing, sortOrder: x.sortOrder, deleted: x.deleted,
+  }), { family: state.family?.id });
 }
 export function saveMember(m: Member) {
   const isNew = !state.members.some((x) => x.id === m.id);
-  put('members', m);
-  const body: Record<string, unknown> = { name: m.name, color: m.color, emoji: m.emoji, birthday: m.birthday, notifyAll: m.notifyAll, sortOrder: m.sortOrder };
-  if (isNew) { body.family = state.family?.id; body.role = m.role; } else if (isAdmin() && m.user !== state.user?.id) body.role = m.role;
-  enqueue('memberships', m.id, isNew ? 'create' : 'update', body);
+  const canSetRole = isNew || (isAdmin() && m.user !== state.user?.id);
+  commit('memberships', 'members', m, (x) => ({
+    name: x.name, color: x.color, emoji: x.emoji, birthday: x.birthday, notifyAll: x.notifyAll, sortOrder: x.sortOrder, ...(canSetRole ? { role: x.role } : {}),
+  }), { family: state.family?.id });
 }
 export function removeMember(m: Member) {
   set({ members: state.members.filter((x) => x.id !== m.id) });
@@ -616,7 +789,9 @@ function planReminders() {
   if (!('Notification' in window) || Notification.permission !== 'granted' || !state.family) return;
   const now = Date.now(), horizon = now + 24 * 3600000;
   const mine = me();
-  const relevant = state.events.filter((e) => !e.deleted && (e.reminders?.length ?? 0) > 0 &&
+  const liveCals = new Set(state.calendars.filter((c) => !c.deleted).map((c) => c.id));
+  const liveLists = new Set(state.lists.filter((l) => !l.deleted).map((l) => l.id));
+  const relevant = state.events.filter((e) => !e.deleted && liveCals.has(e.calendar) && Array.isArray(e.reminders) && e.reminders.length > 0 &&
     (mine?.notifyAll || (mine && (e.members.includes(mine.id) || e.driver === mine.id)) || (!e.members.length && e.createdBy === state.user?.id)));
   for (const o of expandEvents(relevant, new Date(now), new Date(horizon + 7 * 86400000))) {
     for (const m of o.event.reminders ?? []) {
@@ -627,12 +802,12 @@ function planReminders() {
     }
   }
   for (const t of state.tasks) {
-    if (t.deleted || t.completed || !t.due || !(t.reminders?.length)) continue;
+    if (t.deleted || t.completed || !t.due || !liveLists.has(t.list) || !Array.isArray(t.reminders) || !t.reminders.length) continue;
     if (!(mine?.notifyAll || (mine && t.assignees.includes(mine.id)) || (!t.assignees.length && t.createdBy === state.user?.id))) continue;
     const due = LocalDateTime.parse(t.due);
     if (!due) continue;
     for (const m of t.reminders!) {
-      const at = due.toDate(localTZ()).getTime() - m * 60000;
+      const at = (t.due.length > 10 ? due.toDate(familyTZ()) : due.addMinutes(9 * 60).toDate(localTZ())).getTime() - m * 60000;
       if (at > now && at < horizon) reminderTimers.push(window.setTimeout(() => notify(t.title, 'To-do due', `t.${t.id}.${m}`), at - now));
     }
   }

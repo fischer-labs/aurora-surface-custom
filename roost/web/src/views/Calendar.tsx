@@ -68,14 +68,15 @@ export function CalendarPage() {
           {MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
         <FilterMenu />
-        <Menu trigger={(t) => <button className="btn primary" onClick={t} disabled={!canAdd}><Plus size={18} /> New</button>}>
+        <button className="btn primary fab-mobile only-mobile" onClick={() => setQuick(true)} disabled={!canAdd}><Plus size={18} /> New</button>
+        <span className="only-desktop"><Menu trigger={(t) => <button className="btn primary" onClick={t} disabled={!canAdd}><Plus size={18} /> New</button>}>
           {(close) => (
             <>
               <button onClick={() => { close(); setQuick(true); }}><Text size={16} /> Quick add <span className="kbd" style={{ marginLeft: 'auto' }}>N</span></button>
               <button onClick={() => { close(); const d = new Date(anchor); d.setHours(isToday(anchor) ? new Date().getHours() + 1 : 9, 0, 0, 0); startNew(d); }}><Plus size={16} /> New event</button>
             </>
           )}
-        </Menu>
+        </Menu></span>
       </div>
       {mode === 'month' && <MonthView anchor={anchor} onPick={setAnchor} onOpen={setOpen} onNew={startNew} />}
       {mode === 'agenda' && <AgendaView anchor={anchor} onOpen={setOpen} />}
@@ -86,7 +87,8 @@ export function CalendarPage() {
       )}
       {open && <ItemModal item={open} onClose={() => setOpen(null)} />}
       {draft && <EventEditor event={draft} isNew onClose={() => setDraft(null)} />}
-      {quick && <QuickAdd mode="event" onClose={() => setQuick(false)} />}
+      {quick && <QuickAdd mode="event" onClose={() => setQuick(false)}
+        onMore={() => { setQuick(false); const d = new Date(anchor); d.setHours(isToday(anchor) ? new Date().getHours() + 1 : 9, 0, 0, 0); startNew(d); }} />}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Bell, CalendarPlus, Car, Link as LinkIcon, Lock, MapPin, Pencil, Repeat, Trash2 } from 'lucide-react';
 import {
   canEditEvent, deleteEvent, deleteOccurrence, editableCalendars, endSeries, member, membersOf, newEvent, saveEvent,
-  saveFollowingEdit, saveOccurrenceEdit, sortedMembers, useRoost, type Occurrence,
+  saveFollowingEdit, saveOccurrenceEdit, saveSeriesEdit, sortedMembers, useRoost, type Occurrence,
 } from '../data/store';
 import { pbDate, toPB, type EventRec } from '../data/models';
 import { RRule } from '../core/recurrence';
@@ -139,8 +139,9 @@ export function EventEditor({ event, isNew, occ, onClose }: { event: EventRec; i
     const base = preset === 'custom' ? e.rrule : presetRule(preset, start);
     const r = RRule.parse(base);
     if (!r) return '';
-    r.count = undefined;
     const u = until ? LocalDateTime.parse(until) : null;
+    // Keep "N times" unless an end date was chosen instead.
+    r.count = u ? undefined : RRule.parse(event.rrule)?.count;
     r.until = u ? { kind: 'date', date: u.date } : undefined;
     return r.toString();
   }
@@ -152,13 +153,8 @@ export function EventEditor({ event, isNew, occ, onClose }: { event: EventRec; i
     } else if (pbDate(out.end)! < pbDate(out.start)!) out = { ...out, end: toPB(new Date(pbDate(out.start)!.getTime() + 3600000)) };
     if (occ && which === 'one') saveOccurrenceEdit(occ, out);
     else if (occ && which === 'following') saveFollowingEdit(occ, out);
-    else if (occ && which === 'all') {
-      const master = s.events.find((x) => x.id === occ.event.id)!;
-      const shift = pbDate(out.start)!.getTime() - occ.start.getTime();
-      const ms = new Date(pbDate(master.start)!.getTime() + shift);
-      const dur = pbDate(out.end)!.getTime() - pbDate(out.start)!.getTime();
-      saveEvent({ ...out, start: toPB(ms), end: toPB(new Date(ms.getTime() + dur)), exdates: master.exdates });
-    } else saveEvent(out);
+    else if (occ && which === 'all') saveSeriesEdit(occ, out);
+    else saveEvent(out);
     onClose();
   }
   const valid = e.title.trim() && e.calendar;
