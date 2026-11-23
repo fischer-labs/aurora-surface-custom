@@ -23,19 +23,27 @@ Budget about an hour the first time. Steps 1–3 are yours; step 4 is the family
 
 ## 1. Run the server
 
-### Option A — Home lab with Docker + Cloudflare Tunnel (recommended for you)
+### Option A — Your home-lab server (recommended)
 
-No open router ports, free TLS, and the box can stay on your LAN.
+Roost runs as one container on any of your Linux boxes. The web app is served by that same container at an unlisted path, so **desktop access is just a bookmark** — it isn't linked from any other site. How people reach it:
+
+| Who | How | Setup |
+|---|---|---|
+| You, on home-lab / tailnet machines | `https://homelab.<tailnet>.ts.net/h/9f3c1a7e2b/` | `tailscale serve --bg 8090` on the server (Tailscale issues the HTTPS cert) |
+| Anyone on the home LAN | `http://homelab.local:8090/h/9f3c1a7e2b/` | change the compose port to `"0.0.0.0:8090:8090"` (browsers only; the iPhone app requires HTTPS) |
+| Nanny, grandparents, phones away from home | `https://family.example.com/...` | Cloudflare Tunnel (below) — no open router ports, free TLS |
+
+Start it:
 
 ```bash
 git clone -b claude/family-org-app-izwsw6 https://github.com/fischer-labs/aurora-surface-custom.git
 cd aurora-surface-custom/roost
 cp deploy/example.env .env
 deploy/new-web-path.sh            # e.g. /h/9f3c1a7e2b/  → paste into ROOST_WEB_PATH in .env
-docker compose up -d --build      # builds web + server into one ~25 MB image
+docker compose up -d --build      # builds web + server into one ~55 MB image
 ```
 
-Then in the Cloudflare dashboard: **Zero Trust → Networks → Tunnels → Create tunnel**, copy the token into `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, add a public hostname `family.example.com → http://roost:8090`, and run:
+To make it reachable from anywhere (needed for the iPhone app outside your network and for the nanny/grandparents), in the Cloudflare dashboard: **Zero Trust → Networks → Tunnels → Create tunnel**, copy the token into `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, add a public hostname `family.example.com → http://roost:8090`, and run:
 
 ```bash
 docker compose --profile tunnel up -d

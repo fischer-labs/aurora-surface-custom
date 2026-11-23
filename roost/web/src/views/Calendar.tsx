@@ -331,7 +331,7 @@ function TimeGrid({ anchor, days, byPeople, onOpen, onNew, onPickDay }: {
       <div className="tg-scroll" ref={scroller}>
         <div className="tg-body" style={{ gridTemplateColumns: template, height: hour * 24, minWidth: byPeople ? 52 + cols.length * 110 : undefined }}>
           <div className="tg-hours">{Array.from({ length: 24 }, (_, h) => <div key={h}>{h ? fmtHour(h) : ''}</div>)}</div>
-          {cols.map((c) => {
+          {cols.map((c, ci) => {
             const dayStart = c.day.getTime(), dayEnd = addDays(c.day, 1).getTime();
             const mine = items.filter((i) => !i.allDay && i.start.getTime() < dayEnd && i.end.getTime() > dayStart && c.filter(i));
             const mm = (d: Date) => Math.max(0, Math.min(1440, (d.getTime() - dayStart) / 60000));
@@ -353,7 +353,7 @@ function TimeGrid({ anchor, days, byPeople, onOpen, onNew, onPickDay }: {
                     </div>
                   );
                 })}
-                {isToday(c.day) && <div className="nowline" style={{ top: ((now.getHours() * 60 + now.getMinutes()) / 60) * hour }} />}
+                {isToday(c.day) && <div className={`nowline${byPeople && ci > 0 ? ' nodot' : ''}`} style={{ top: ((now.getHours() * 60 + now.getMinutes()) / 60) * hour }} />}
               </div>
             );
           })}

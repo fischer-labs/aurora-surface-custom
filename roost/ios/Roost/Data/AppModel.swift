@@ -8,6 +8,9 @@ import RoostKit
 final class AppModel {
     enum Phase: Equatable { case launching, onboarding, ready }
 
+    /// One instance for the UI and for Siri/Shortcuts intents.
+    static let shared = AppModel()
+
     var phase: Phase = .launching
     var store: FamilyStore?
     var user: UserProfile?
@@ -40,7 +43,17 @@ final class AppModel {
 
     // MARK: Launch
 
+    @ObservationIgnored private var bootTask: Task<Void, Never>?
+
+    /// Safe to call more than once (the UI and an intent may both start the app).
     func bootstrap() async {
+        if let t = bootTask { await t.value; return }
+        let t = Task { await self.runBootstrap() }
+        bootTask = t
+        await t.value
+    }
+
+    private func runBootstrap() async {
         // `-RoostDemo 1` (launch argument): a realistic sample family, on device only.
         if UserDefaults.standard.bool(forKey: "RoostDemo") {
             store = FamilyStore(snapshot: LocalSeed.demo(), userId: LocalSeed.userId, remote: nil)

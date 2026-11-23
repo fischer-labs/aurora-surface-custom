@@ -5,7 +5,7 @@ import RoostKit
 @main
 struct RoostApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @State private var app = AppModel()
+    @State private var app = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

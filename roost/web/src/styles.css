@@ -229,6 +229,7 @@ textarea.input { resize: vertical; min-height: 80px; }
 .ev.device { border-style: dashed; border-width: 1px 1px 1px 3px; }
 .ev.busy { background: var(--surface2) !important; color: var(--ink2); border-left-color: var(--ink3) !important; }
 .nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 3; pointer-events: none; }
+.nowline.nodot::before { display: none; }
 .nowline::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .agenda-day { display: flex; align-items: baseline; gap: 10px; padding: 14px 4px 8px; position: sticky; top: 0; background: var(--bg); z-index: 1; }
 .agenda-day b { font: 700 24px var(--font-round); }

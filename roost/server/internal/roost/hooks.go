@@ -233,6 +233,14 @@ func registerHooks(app core.App, cfg Config) {
 	})
 	app.OnRecordCreateRequest("groceryItems").BindFunc(func(e *core.RecordRequestEvent) error {
 		e.Record.Set("addedBy", authID(e.RequestEvent))
+		// Clients categorize on device; fill in for raw API/agent requests.
+		if strings.TrimSpace(e.Record.GetString("category")) == "" {
+			if l, err := e.App.FindRecordById("lists", e.Record.GetString("list")); err == nil {
+				cat, src := categorizeGrocery(e.Record.GetString("name"), learnedTerms(e.App, l.GetString("family")))
+				e.Record.Set("category", cat)
+				e.Record.Set("categorySource", src)
+			}
+		}
 		return e.Next()
 	})
 	app.OnRecordUpdateRequest("groceryItems").BindFunc(func(e *core.RecordRequestEvent) error {
