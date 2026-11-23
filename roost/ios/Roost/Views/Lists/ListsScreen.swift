@@ -25,11 +25,11 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
     }
     var color: Color {
         switch self {
-        case .today: return Palette.blue.color
-        case .upcoming: return Palette.violet.color
-        case .mine: return Palette.green.color
-        case .overdue: return Palette.red.color
-        case .flagged: return Palette.orange.color
+        case .today: return Palette.blue.fill
+        case .upcoming: return Palette.violet.fill
+        case .mine: return Palette.green.fill
+        case .overdue: return Palette.red.fill
+        case .flagged: return Palette.red.fill
         }
     }
 
@@ -63,14 +63,16 @@ struct ListsScreen: View {
     @Environment(FamilyStore.self) private var store
     @State private var newList: TaskList?
     @State private var showQuickAdd = false
+    @State private var path: [ListRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                         ForEach(SmartList.allCases) { s in
-                            NavigationLink(value: ListRoute.smart(s)) { smartTile(s) }.buttonStyle(.plain)
+                            // A plain button: a NavigationLink in a List row adds a chevron that floats in the gutter.
+                            Button { path.append(.smart(s)) } label: { smartTile(s) }.buttonStyle(.plain)
                         }
                     }
                     .listRowInsets(EdgeInsets())
@@ -81,14 +83,15 @@ struct ListsScreen: View {
                         NavigationLink(value: ListRoute.list(l.id)) {
                             HStack(spacing: 12) {
                                 Image(systemName: l.kind == .packing ? "suitcase.fill" : "checklist")
-                                    .foregroundStyle(.white).frame(width: 32, height: 32)
-                                    .background(RoundedRectangle(cornerRadius: 9).fill(Palette.named(l.color).color))
+                                    .foregroundStyle(Palette.named(l.color).onColor).frame(width: 32, height: 32)
+                                    .background(RoundedRectangle(cornerRadius: 9).fill(Palette.named(l.color).fill))
                                 Text(l.name).font(.body.weight(.medium))
                                 Spacer()
                                 let n = store.tasks.filter { $0.list == l.id && !$0.deleted && !$0.completed && $0.parent.isEmpty }.count
                                 if n > 0 { Text("\(n)").foregroundStyle(Color.roostInk3) }
                             }
                         }
+                        .listRowBackground(Color.roostSurface)
                     }
                     if store.taskLists.isEmpty {
                         Text("No lists are shared with you yet. To-dos assigned to you show up in “Assigned to me”.")
@@ -129,6 +132,7 @@ struct ListsScreen: View {
             HStack {
                 Image(systemName: s.icon).font(.title3).foregroundStyle(.white)
                     .frame(width: 34, height: 34).background(Circle().fill(s.color))
+                    .opacity(count == 0 && s == .overdue ? 0.35 : 1)
                 Spacer()
                 Text("\(count)").font(.system(.title2, design: .rounded).weight(.bold)).foregroundStyle(Color.roostInk)
             }
@@ -150,7 +154,7 @@ struct SmartListView: View {
                 EmptyState(systemImage: smart.icon, title: "All clear", message: "Nothing here right now.")
                     .listRowBackground(Color.clear)
             }
-            ForEach(tasks) { t in TaskRow(task: t, showList: true) }
+            ForEach(tasks) { t in TaskRow(task: t, showList: true).listRowBackground(Color.roostSurface) }
         }
         .scrollContentBackground(.hidden)
         .background(Color.roostBG)
@@ -193,13 +197,13 @@ struct TaskListView: View {
                 if open.isEmpty {
                     Text("Nothing to do. Nice.").foregroundStyle(Color.roostInk3)
                 }
-                ForEach(open) { t in TaskRow(task: t, showList: false) }
+                ForEach(open) { t in TaskRow(task: t, showList: false).listRowBackground(Color.roostSurface) }
                     .onMove(perform: editable ? move : nil)
             }
             if !done.isEmpty {
                 Section {
                     DisclosureGroup(isExpanded: $showDone) {
-                        ForEach(done.prefix(50)) { t in TaskRow(task: t, showList: false) }
+                        ForEach(done.prefix(50)) { t in TaskRow(task: t, showList: false).listRowBackground(Color.roostSurface) }
                     } label: {
                         Text("Completed (\(done.count))").font(.subheadline.weight(.semibold))
                     }
@@ -271,16 +275,18 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(task.completed ? Color.ember : (task.priority > 0 ? Palette.orange.color : Color.roostInk3))
+                    .foregroundStyle(task.completed ? Color.emberFill : Color.roostInk3)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.vertical, -8).padding(.leading, -8)
             .disabled(!store.canEdit(task))
             .accessibilityLabel(task.completed ? "Mark not done" : "Mark done")
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     if task.priority > 0 {
-                        Text(String(repeating: "!", count: task.priority)).font(.body.weight(.heavy)).foregroundStyle(Palette.orange.color)
+                        Text(String(repeating: "!", count: task.priority)).font(.body.weight(.heavy)).foregroundStyle(Color.danger)
                     }
                     Text(task.title).strikethrough(task.completed).foregroundStyle(task.completed ? Color.roostInk3 : Color.roostInk)
                 }

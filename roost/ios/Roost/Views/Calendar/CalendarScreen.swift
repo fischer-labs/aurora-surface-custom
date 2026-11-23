@@ -204,39 +204,53 @@ struct DayCell: View {
     var items: [CalItem]
     var inMonth: Bool
     var selected: Bool
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         let isToday = Calendar.current.isDateInToday(date)
-        VStack(spacing: 3) {
+        let compact = sizeClass != .regular
+        VStack(spacing: compact ? 4 : 3) {
             Text(date.formatted(.dateTime.day()))
-                .font(.system(size: 13, weight: isToday || selected ? .bold : .medium, design: .rounded))
+                .font(compact ? Font.rounded(.callout, weight: isToday || selected ? .bold : .medium)
+                              : Font.system(size: 13, weight: isToday || selected ? .bold : .medium, design: .rounded))
                 .foregroundStyle(isToday ? Color.white : (inMonth ? Color.roostInk : Color.roostInk3))
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(isToday ? Color.ember : (selected ? Color.emberSoft : Color.clear)))
-            VStack(spacing: 2) {
-                ForEach(items.prefix(items.count > 3 ? 2 : 3)) { item in
-                    Text(item.title)
-                        .font(.system(size: 9, weight: .semibold))
-                        .lineLimit(1)
-                        .padding(.horizontal, 3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .foregroundStyle(item.isBusy ? Color.roostInk2 : (item.allDay ? Color.white : Color.roostInk))
-                        .background(RoundedRectangle(cornerRadius: 3).fill(item.allDay ? item.color : item.color.opacity(item.isBusy ? 0.12 : 0.2)))
+                .frame(width: compact ? 28 : 24, height: compact ? 28 : 24)
+                .background(Circle().fill(isToday ? Color.emberFill : (selected ? Color.emberSoft : Color.clear)))
+            if compact {
+                // Phones: colored bars only; the day list below carries the details.
+                VStack(spacing: 2) {
+                    ForEach(items.prefix(4)) { item in
+                        Capsule().fill(item.isBusy ? Color.roostInk3 : item.color).frame(height: 5).padding(.horizontal, 3)
+                    }
+                    if items.count > 4 {
+                        Text("+\(items.count - 4)").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.roostInk3).lineLimit(1)
+                    }
                 }
-                if items.count > 3 {
-                    Text("+\(items.count - 2) more").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.roostInk3)
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(items.prefix(items.count > 3 ? 2 : 3)) { item in
+                        Text(item.title)
+                            .font(.system(size: 9, weight: .semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(item.isBusy ? Color.roostInk2 : (item.allDay ? item.onFill : Color.roostInk))
+                            .background(RoundedRectangle(cornerRadius: 3).fill(item.allDay && !item.isBusy ? item.fill : item.color.opacity(item.isBusy ? 0.12 : 0.2)))
+                    }
+                    if items.count > 3 {
+                        Text("+\(items.count - 2) more").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.roostInk3).lineLimit(1)
+                    }
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(.top, 4).padding(.horizontal, 1)
-        .frame(height: 76, alignment: .top)
+        .frame(height: compact ? 58 : 76, alignment: .top)
         .clipped()
         .frame(maxWidth: .infinity)
         .background(selected ? Color.emberSoft.opacity(0.35) : Color.clear)
         .overlay(alignment: .top) { Rectangle().fill(Color.roostLine).frame(height: 0.5) }
         .contentShape(Rectangle())
-        .opacity(inMonth ? 1 : 0.55)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(date.formatted(date: .complete, time: .omitted)), \(items.count) events")
     }
@@ -328,7 +342,8 @@ struct MiniMonth: View {
         let n = cal.range(of: .day, in: .month, for: month)!.count
         VStack(alignment: .leading, spacing: 4) {
             Text(month.formatted(.dateTime.month(.wide))).font(.caption.weight(.bold))
-                .foregroundStyle(cal.isDate(month, equalTo: Date(), toGranularity: .month) ? Color.ember : Color.roostInk)
+                .foregroundStyle(Color.roostInk)
+                .underline(cal.isDate(month, equalTo: Date(), toGranularity: .month), color: .ember)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: 7), spacing: 1) {
                 ForEach(0..<(lead + n), id: \.self) { i in
                     if i < lead {
@@ -339,8 +354,8 @@ struct MiniMonth: View {
                         Text("\(i - lead + 1)")
                             .font(.system(size: 7, weight: .medium))
                             .frame(maxWidth: .infinity, minHeight: 12)
-                            .foregroundStyle(c > 2 ? Color.white : Color.roostInk2)
-                            .background(RoundedRectangle(cornerRadius: 2).fill(Color.ember.opacity(c == 0 ? 0 : min(0.2 + Double(c) * 0.18, 0.95))))
+                            .foregroundStyle(c > 0 ? Color.roostInk : Color.roostInk2)
+                            .background(RoundedRectangle(cornerRadius: 2).fill(Color.roostInk2.opacity(c == 0 ? 0 : min(0.1 + Double(c) * 0.1, 0.45))))
                             .overlay(RoundedRectangle(cornerRadius: 2).stroke(cal.isDateInToday(d) ? Color.ember : .clear, lineWidth: 1))
                     }
                 }

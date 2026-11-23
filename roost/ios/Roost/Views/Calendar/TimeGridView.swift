@@ -53,28 +53,35 @@ struct TimeGridView: View {
         let windowEnd = cal.date(byAdding: .day, value: byPeople ? 1 : days, to: firstDay)!
         let items = CalItem.build(store: store, prefs: prefs, device: device, from: firstDay, to: windowEnd)
         GeometryReader { geo in
-            // Columns always fit the screen width; only the hours scroll.
-            let colWidth = (geo.size.width - TimeGridView.gutter) / CGFloat(max(cols.count, 1))
-            VStack(spacing: 0) {
-                header(cols, colWidth: colWidth)
-                allDayRow(cols, items: items, colWidth: colWidth)
-                Divider()
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        ZStack(alignment: .topLeading) {
-                            hourLines(width: geo.size.width)
-                            ForEach(Array(cols.enumerated()), id: \.element.id) { idx, col in
-                                columnBody(col, items: timedItems(for: col, in: items), width: colWidth, showNowDot: idx == 0 || !byPeople)
-                                    .frame(width: colWidth, height: TimeGridView.hourHeight * 24)
-                                    .offset(x: TimeGridView.gutter + CGFloat(idx) * colWidth)
+            // Day columns fit the screen; People columns keep a readable width and scroll sideways.
+            let fit = (geo.size.width - TimeGridView.gutter) / CGFloat(max(cols.count, 1))
+            let colWidth = byPeople ? max(fit, 88) : fit
+            let contentWidth = TimeGridView.gutter + colWidth * CGFloat(cols.count)
+            let start = scrollHour(items)
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    header(cols, colWidth: colWidth)
+                    allDayRow(cols, items: items, colWidth: colWidth)
+                    Divider()
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            ZStack(alignment: .topLeading) {
+                                hourLines(width: contentWidth)
+                                ForEach(Array(cols.enumerated()), id: \.element.id) { idx, col in
+                                    columnBody(col, items: timedItems(for: col, in: items), width: colWidth, showNowDot: idx == 0 || !byPeople)
+                                        .frame(width: colWidth, height: TimeGridView.hourHeight * 24)
+                                        .offset(x: TimeGridView.gutter + CGFloat(idx) * colWidth)
+                                }
                             }
+                            .frame(width: contentWidth, height: TimeGridView.hourHeight * 24, alignment: .topLeading)
                         }
-                        .frame(width: geo.size.width, height: TimeGridView.hourHeight * 24, alignment: .topLeading)
+                        .onAppear { proxy.scrollTo(start, anchor: .top) }
+                        .onChange(of: anchor) { _, _ in proxy.scrollTo(scrollHour(CalItem.build(store: store, prefs: prefs, device: device, from: firstDay, to: cal.date(byAdding: .day, value: byPeople ? 1 : days, to: firstDay)!)), anchor: .top) }
                     }
-                    .onAppear { proxy.scrollTo(scrollHour, anchor: .top) }
-                    .onChange(of: anchor) { _, _ in proxy.scrollTo(scrollHour, anchor: .top) }
                 }
+                .frame(width: contentWidth, height: geo.size.height, alignment: .top)
             }
+            .scrollDisabled(contentWidth <= geo.size.width + 1)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .gesture(DragGesture(minimumDistance: 40).onEnded { v in
@@ -84,8 +91,17 @@ struct TimeGridView: View {
         })
     }
 
-    private var scrollHour: Int {
-        cal.isDateInToday(anchor) ? max(0, cal.component(.hour, from: Date()) - 1) : 7
+    /// Today in view → an hour before now; otherwise the first timed event (or 7 AM if later).
+    /// Never cut an event off at the top edge, which would leave an untitled block.
+    private func scrollHour(_ items: [CalItem]) -> Int {
+        let timed = items.filter { !$0.allDay }
+        let hourOf: (Date) -> Int = { cal.component(.hour, from: $0) }
+        let showsToday = (0..<(byPeople ? 1 : days)).contains { cal.isDateInToday(cal.date(byAdding: .day, value: $0, to: firstDay)!) }
+        var h = showsToday ? max(0, hourOf(Date()) - 1) : min(7, timed.map { hourOf($0.start) }.min() ?? 7)
+        for i in timed where hourOf(i.start) < h && (cal.isDate(i.start, inSameDayAs: i.end) ? hourOf(i.end) : 24) > h {
+            h = hourOf(i.start)
+        }
+        return h
     }
 
     private func header(_ cols: [Column], colWidth: CGFloat) -> some View {
@@ -97,14 +113,14 @@ struct TimeGridView: View {
                         Avatar(member: m, size: min(26, colWidth - 8))
                         Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk).lineLimit(1).minimumScaleFactor(0.6)
                     } else if byPeople {
-                        Image(systemName: "house.fill").foregroundStyle(Color.ember).frame(height: 26)
+                        Image(systemName: "house.fill").foregroundStyle(Color.roostInk2).frame(height: 26)
                         Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk)
                     } else {
                         Text(c.title.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(c.highlight ? Color.ember : Color.roostInk3)
                         Text(c.subtitle).font(.system(.title3, design: .rounded).weight(.semibold))
                             .foregroundStyle(c.highlight ? Color.white : Color.roostInk)
                             .frame(width: 34, height: 34)
-                            .background(Circle().fill(c.highlight ? Color.ember : .clear))
+                            .background(Circle().fill(c.highlight ? Color.emberFill : .clear))
                     }
                 }
                 .frame(width: colWidth)
@@ -127,10 +143,10 @@ struct TimeGridView: View {
                             ForEach(allDayItems(for: c, in: items).prefix(3)) { item in
                                 NavigationLink(value: item) {
                                     Text(item.title).font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                                        .foregroundStyle(Color.white)
+                                        .foregroundStyle(item.isBusy ? Color.white : item.onFill)
                                         .padding(.horizontal, 4).padding(.vertical, 2)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(RoundedRectangle(cornerRadius: 4).fill(item.isBusy ? Color.roostInk3 : item.color))
+                                        .background(RoundedRectangle(cornerRadius: 4).fill(item.isBusy ? Color.roostInk3 : item.fill))
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -225,8 +241,10 @@ struct EventBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 3) {
-                if item.task != nil { Image(systemName: "circle").font(.system(size: 9, weight: .bold)) }
-                Text(item.title).font(.system(size: compact ? 10 : 12, weight: .semibold)).lineLimit(compact ? 1 : 2)
+                if item.task != nil && !compact { Image(systemName: "circle").font(.system(size: 9, weight: .bold)) }
+                // Narrow blocks wrap instead of truncating to "Socc…".
+                Text(item.title).font(.system(size: compact ? 10 : 12, weight: .semibold)).lineLimit(compact ? 3 : 2)
+                    .minimumScaleFactor(0.85)
             }
             if !compact {
                 Text(Fmt.time(item.start)).font(.system(size: 10)).opacity(0.8)

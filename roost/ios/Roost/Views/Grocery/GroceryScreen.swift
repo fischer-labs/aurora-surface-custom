@@ -77,7 +77,7 @@ struct GroceryScreen: View {
                     .sorted { $0.sortOrder < $1.sortOrder }
                 if !inCat.isEmpty {
                     Section {
-                        ForEach(inCat) { it in row(it, editable: editable) }
+                        ForEach(inCat) { it in row(it, editable: editable).listRowBackground(Color.roostSurface) }
                     } header: {
                         HStack(spacing: 6) {
                             Text(cat.emoji)
@@ -91,7 +91,7 @@ struct GroceryScreen: View {
             if !cart.isEmpty {
                 Section {
                     if showCart {
-                        ForEach(cart) { it in row(it, editable: editable) }
+                        ForEach(cart) { it in row(it, editable: editable).listRowBackground(Color.roostSurface) }
                     }
                 } header: {
                     HStack {
@@ -118,7 +118,7 @@ struct GroceryScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 Image(systemName: "plus.circle.fill").foregroundStyle(Color.ember).font(.title3)
-                TextField("Add items — “2 lb chicken, milk x2, eggs”", text: $input, axis: .vertical)
+                TextField("Add groceries…", text: $input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .submitLabel(.done)
@@ -131,11 +131,15 @@ struct GroceryScreen: View {
                 let c = GroceryTaxonomy.bundled.category(store.categorizer.categorize(p.name).category)
                 Text("\(c.emoji) \(p.name)\(GroceryParser.formatQuantity(p.quantity, unit: p.unit).map { " · " + $0 } ?? "") → \(c.name)")
                     .font(.caption).foregroundStyle(Color.roostInk2)
+            } else if input.isEmpty {
+                Text("Type several at once — 2 lb chicken, milk x2 — or paste a list.")
+                    .font(.caption).foregroundStyle(Color.roostInk2)
             }
             let suggestions = store.suggestions(list: list.id, limit: 10)
             if !suggestions.isEmpty && input.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
+                        Text("Buy again").font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk2)
                         ForEach(suggestions, id: \.self) { s in
                             Button { store.addGroceries(s, list: list.id) } label: {
                                 Label(s, systemImage: "arrow.counterclockwise").font(.caption.weight(.semibold))
@@ -165,14 +169,17 @@ struct GroceryScreen: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 Image(systemName: it.checked ? "checkmark.circle.fill" : "circle")
-                    .font(.title2).foregroundStyle(it.checked ? Palette.green.color : Color.roostInk3)
+                    .font(.title2).foregroundStyle(it.checked ? Palette.green.fill : Color.roostInk3)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.vertical, -8).padding(.leading, -8)
             .disabled(!editable)
+            .accessibilityLabel(it.checked ? "Put \(it.name) back" : "Got \(it.name)")
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(it.name).strikethrough(it.checked).foregroundStyle(it.checked ? Color.roostInk3 : Color.roostInk)
-                    if it.categorySource == "ai" { Image(systemName: "sparkles").font(.caption2).foregroundStyle(Color.ember) }
+                    if it.categorySource == "ai" { Image(systemName: "sparkles").font(.caption2).foregroundStyle(Color.roostInk3) }
                 }
                 if !it.note.isEmpty { Text(it.note).font(.caption).foregroundStyle(Color.roostInk2) }
             }
@@ -185,9 +192,17 @@ struct GroceryScreen: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { if editable { editingItem = it } }
+        // In the store, tapping anywhere on the row ticks the item off; editing is a swipe or long-press away.
+        .onTapGesture {
+            guard editable else { return }
+            withAnimation(.snappy) { store.toggle(grocery: it) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
         .swipeActions(edge: .trailing) {
             if editable { Button(role: .destructive) { store.delete(grocery: it) } label: { Label("Delete", systemImage: "trash") } }
+        }
+        .swipeActions(edge: .leading) {
+            if editable { Button { editingItem = it } label: { Label("Edit", systemImage: "pencil") }.tint(.indigo) }
         }
         .contextMenu {
             if editable {

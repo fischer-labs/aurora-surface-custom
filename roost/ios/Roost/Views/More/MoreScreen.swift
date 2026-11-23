@@ -74,14 +74,23 @@ struct InfoCardsView: View {
             ForEach(store.liveCards) { c in
                 NavigationLink(value: c) {
                     HStack(spacing: 12) {
-                        Image(systemName: InfoCardDetail.icon(for: c)).foregroundStyle(Color.ember).frame(width: 28)
+                        CardIcon(card: c)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(c.title).font(.body.weight(.semibold))
-                            Text(c.body).font(.caption).foregroundStyle(Color.roostInk2).lineLimit(2)
+                            let preview = InfoCardDetail.preview(c)
+                            Text(preview.isEmpty ? (store.isAdmin ? "Tap to fill in" : "Nothing here yet") : preview)
+                                .font(.caption).foregroundStyle(preview.isEmpty ? Color.roostInk3 : Color.roostInk2).lineLimit(2)
                         }
-                        if c.pinned { Spacer(); Image(systemName: "pin.fill").font(.caption).foregroundStyle(Color.roostInk3) }
+                        Spacer(minLength: 0)
+                        if c.pinned { Image(systemName: "pin.fill").font(.caption).foregroundStyle(Color.roostInk3) }
                     }
                 }
+                .swipeActions(edge: .leading) {
+                    if let url = InfoCardDetail.telURL(c) {
+                        Button { UIApplication.shared.open(url) } label: { Label("Call", systemImage: "phone.fill") }.tint(.green)
+                    }
+                }
+                .listRowBackground(Color.roostSurface)
             }
         }
         .scrollContentBackground(.hidden)
@@ -103,6 +112,19 @@ struct InfoCardDetail: View {
     var card: InfoCard
     @State private var editing = false
 
+    /// Card body for previews: drops unfilled "Label:" lines; phone numbers don't break at hyphens.
+    static func preview(_ c: InfoCard) -> String {
+        c.body.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasSuffix(":") }
+            .joined(separator: "\n")
+            .replacingOccurrences(of: #"(\d)-(?=\d)"#, with: "$1\u{2011}", options: .regularExpression)
+    }
+
+    static func telURL(_ c: InfoCard) -> URL? {
+        let digits = c.phone.filter { "0123456789+".contains($0) }
+        return digits.isEmpty ? nil : URL(string: "tel:" + digits)
+    }
+
     static func icon(for c: InfoCard) -> String {
         if !c.icon.isEmpty && UIImage(systemName: c.icon) != nil { return c.icon }
         switch c.kind {
@@ -122,14 +144,18 @@ struct InfoCardDetail: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: InfoCardDetail.icon(for: c)).font(.title).foregroundStyle(Color.ember)
+                    CardIcon(card: c, size: 48)
                     Text(c.title).font(.rounded(.title2, weight: .bold))
                     if let m = store.member(c.aboutMember) { Label(m.name, systemImage: "person.fill").font(.subheadline).foregroundStyle(Color.roostInk2) }
                 }
                 .padding(.vertical, 4)
             }
-            if !c.phone.isEmpty, let url = URL(string: "tel:" + c.phone.filter { "0123456789+".contains($0) }) {
-                Section { Link(destination: url) { Label(c.phone, systemImage: "phone.fill") } }
+            if let url = InfoCardDetail.telURL(c) {
+                Section {
+                    Link(destination: url) {
+                        Label("Call \(c.phone)", systemImage: "phone.fill").font(.body.weight(.semibold)).frame(minHeight: 44)
+                    }
+                }
             }
             if !c.address.isEmpty {
                 Section {
@@ -502,5 +528,19 @@ struct SettingsView: View {
 
     private func refresh() async {
         notifStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+}
+
+/// Neutral icon badge — ember is reserved for actions, today and selection.
+struct CardIcon: View {
+    var card: InfoCard
+    var size: CGFloat = 32
+    var body: some View {
+        Image(systemName: InfoCardDetail.icon(for: card))
+            .font(.system(size: size * 0.45, weight: .semibold))
+            .foregroundStyle(Color.roostInk2)
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color.roostSurface2))
+            .accessibilityHidden(true)
     }
 }

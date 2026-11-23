@@ -71,7 +71,7 @@ public enum Role: String, Codable, CaseIterable, Sendable, Identifiable {
         case .owner: return "Owner"
         case .parent: return "Parent"
         case .caregiver: return "Caregiver"
-        case .relative: return "Family"
+        case .relative: return "Relative"
         case .kid: return "Kid"
         }
     }
@@ -80,7 +80,7 @@ public enum Role: String, Codable, CaseIterable, Sendable, Identifiable {
         case .owner: return "Full control, including roles and sharing."
         case .parent: return "Manages calendars, lists, invites and sharing."
         case .caregiver: return "Nanny or sitter: kids' schedule, groceries, assigned to-dos, care info."
-        case .relative: return "Grandparents and family: view the family calendar and care info."
+        case .relative: return "Grandparents, aunts & uncles: view the family calendar and care info."
         case .kid: return "Sees the family calendar, adds to groceries, checks off their to-dos."
         }
     }

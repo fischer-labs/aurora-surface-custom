@@ -22,6 +22,12 @@ struct CalItem: Identifiable, Hashable {
     var isBusy: Bool = false
     var location: String = ""
     var driverId: String = ""
+    /// Palette name for Roost items ("" for phone-calendar events, which bring their own color).
+    var colorName: String = ""
+
+    /// Solid fill and the text color that reads on it (AA): darker person colors, dark text on amber/lime.
+    var fill: Color { colorName.isEmpty ? color : Palette.named(colorName).fill }
+    var onFill: Color { colorName.isEmpty ? .white : Palette.named(colorName).onColor }
 
     var occurrence: Occurrence? { if case .roost(let o) = source { return o } else { return nil } }
     var task: TaskItem? { if case .task(let t) = source { return t } else { return nil } }
@@ -41,9 +47,10 @@ struct CalItem: Identifiable, Hashable {
                 let who = store.members(e.members).map(\.name).joined(separator: ", ")
                 title = who.isEmpty ? "Busy" : "\(who) busy"
             }
+            let name = store.colorName(for: e, byPerson: prefs.colorByPerson)
             out.append(CalItem(id: o.id, title: title, start: o.start, end: o.end, allDay: e.allDay,
-                               color: Palette.named(store.colorName(for: e, byPerson: prefs.colorByPerson)).color,
-                               source: .roost(o), memberIds: e.members, isBusy: e.isBusyBlock, location: e.location, driverId: e.driver))
+                               color: Palette.named(name).color,
+                               source: .roost(o), memberIds: e.members, isBusy: e.isBusyBlock, location: e.location, driverId: e.driver, colorName: name))
         }
         if prefs.showDevice && prefs.people.isEmpty {
             for ek in device.events(from: from, to: to) {
@@ -64,10 +71,10 @@ struct CalItem: Identifiable, Hashable {
                 let start = d.toDate(in: t.dueHasTime ? familyTZ : .current)
                 let dayStart = cal.startOfDay(for: start)
                 guard start < to && (t.dueHasTime ? start : dayStart.addingTimeInterval(86400)) > from else { continue }
-                let color = t.assignees.first.flatMap(store.member).map { Palette.named($0.color).color } ?? Color.roostInk3
+                let name = t.assignees.first.flatMap(store.member)?.color ?? "brown"
                 out.append(CalItem(id: "task|" + t.id, title: t.title, start: t.dueHasTime ? start : dayStart,
                                    end: t.dueHasTime ? start.addingTimeInterval(1800) : dayStart.addingTimeInterval(86400),
-                                   allDay: !t.dueHasTime, color: color, source: .task(t), memberIds: t.assignees))
+                                   allDay: !t.dueHasTime, color: Palette.named(name).color, source: .task(t), memberIds: t.assignees, colorName: name))
             }
         }
         return out.sorted { a, b in
@@ -104,9 +111,12 @@ struct CalItemRow: View {
                 HStack(spacing: 6) {
                     if let t = item.task {
                         Button { store.toggle(task: t) } label: {
-                            Image(systemName: "circle").foregroundStyle(item.color)
+                            Image(systemName: "circle").font(.title3).foregroundStyle(Color.roostInk3)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .padding(.vertical, -12).padding(.leading, -10).padding(.trailing, -8)
+                        .accessibilityLabel("Mark \(t.title) done")
                     }
                     Text(item.title).font(.body.weight(.semibold)).foregroundStyle(item.isBusy ? Color.roostInk3 : Color.roostInk).lineLimit(2)
                     if item.occurrence?.event.rrule.isEmpty == false {

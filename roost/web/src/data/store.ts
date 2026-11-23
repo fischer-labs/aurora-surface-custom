@@ -807,7 +807,8 @@ function planReminders() {
     const due = LocalDateTime.parse(t.due);
     if (!due) continue;
     for (const m of t.reminders!) {
-      const at = (t.due.length > 10 ? due.toDate(familyTZ()) : due.addMinutes(9 * 60).toDate(localTZ())).getTime() - m * 60000;
+      // Timed: family time zone. Dated: offsets count from local midnight (−540 = 9 AM on the day).
+      const at = (t.due.length > 10 ? due.toDate(familyTZ()) : due.toDate(localTZ())).getTime() - m * 60000;
       if (at > now && at < horizon) reminderTimers.push(window.setTimeout(() => notify(t.title, 'To-do due', `t.${t.id}.${m}`), at - now));
     }
   }

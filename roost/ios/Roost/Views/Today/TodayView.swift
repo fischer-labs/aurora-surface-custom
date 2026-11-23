@@ -5,6 +5,8 @@ struct TodayView: View {
     @Environment(FamilyStore.self) private var store
     @Environment(CalendarPrefs.self) private var prefs
     @Environment(DeviceCalendars.self) private var device
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var typeSize
     var selectTab: (MainTab) -> Void
     @State private var showQuickAdd = false
     @State private var now = Date()
@@ -33,7 +35,6 @@ struct TodayView: View {
                     Button { showQuickAdd = true } label: { Image(systemName: "plus.circle.fill").font(.title2) }
                         .accessibilityLabel("Quick add")
                 }
-                ToolbarItem(placement: .topBarLeading) { SyncBadge() }
             }
             .sheet(isPresented: $showQuickAdd) { QuickAddSheet(mode: .event) }
             .onReceive(timer) { now = $0 }
@@ -51,10 +52,31 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
                 .font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(Color.ember)
-            Text(greeting).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(Color.roostInk)
-            Text(store.family.name).font(.subheadline).foregroundStyle(Color.roostInk2)
+            Text(greeting).font(.rounded(.largeTitle, weight: .bold)).foregroundStyle(Color.roostInk)
+            HStack(spacing: 8) {
+                Text(glance).font(.subheadline).foregroundStyle(Color.roostInk2)
+                SyncBadge().labelStyle(.titleAndIcon)
+            }
         }
         .padding(.top, 8)
+    }
+
+    /// "2 events · 1 to-do due · 13 groceries"
+    private var glance: String {
+        let events = todayItems.count
+        let today = LocalDateTime(now, in: .current).date.description
+        let due = dueTasks(today).count
+        let groceries = store.groceryLists.first.map { l in store.grocery.filter { $0.list == l.id && !$0.deleted && !$0.checked }.count } ?? 0
+        var parts = [events == 0 ? "No events" : "\(events) event\(events == 1 ? "" : "s")"]
+        if due > 0 { parts.append("\(due) to-do\(due == 1 ? "" : "s") due") }
+        if groceries > 0 { parts.append("\(groceries) grocer\(groceries == 1 ? "y" : "ies")") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func dueTasks(_ today: String) -> [TaskItem] {
+        let live = store.liveListIds
+        return store.tasks.filter { !$0.deleted && !$0.completed && !$0.due.isEmpty && String($0.due.prefix(10)) <= today && $0.parent.isEmpty && live.contains($0.list) }
+            .sorted { $0.due < $1.due }
     }
 
     private var todayItems: [CalItem] {
@@ -70,23 +92,34 @@ struct TodayView: View {
             NavigationLink(value: next) {
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(isNow ? "HAPPENING NOW" : "UP NEXT").font(.caption2.weight(.heavy)).tracking(1).foregroundStyle(.white.opacity(0.85))
-                        Text(next.title).font(.rounded(.title3, weight: .bold)).foregroundStyle(.white).lineLimit(2)
+                        Text(isNow ? "HAPPENING NOW" : "UP NEXT").font(.caption2.weight(.heavy)).tracking(1).opacity(0.85)
+                        Text(next.title).font(.rounded(.title3, weight: .bold)).lineLimit(2)
                         Text(isNow ? "until \(Fmt.time(next.end))" : "\(Fmt.time(next.start)) · \(relative(next.start))")
-                            .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.9))
+                            .font(.subheadline.weight(.medium)).opacity(0.9)
                         if let d = store.member(next.driverId) {
-                            Label("\(d.name) is driving", systemImage: "car.fill").font(.caption.weight(.semibold)).foregroundStyle(.white)
+                            Label("\(d.name) is driving", systemImage: "car.fill").font(.caption.weight(.semibold))
                         }
                     }
                     Spacer()
-                    AvatarStack(members: store.members(next.memberIds), size: 30, max: 3)
+                    // On a person-colored card, avatars are white rings rather than more person color.
+                    HStack(spacing: -6) {
+                        ForEach(store.members(next.memberIds).prefix(3)) { m in
+                            Text(m.emoji.isEmpty ? m.initials.uppercased() : m.emoji)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .frame(width: 30, height: 30)
+                                .background(Circle().fill(Color.white.opacity(0.22)))
+                                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
+                                .accessibilityLabel(m.name)
+                        }
+                    }
                 }
+                .foregroundStyle(next.onFill)
                 .padding(18)
                 .background(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(LinearGradient(colors: [next.color, next.color.opacity(0.78)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [next.fill, next.fill.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 )
-                .shadow(color: next.color.opacity(0.25), radius: 14, y: 6)
+                .shadow(color: colorScheme == .dark ? .black.opacity(0.45) : next.color.opacity(0.25), radius: 14, y: 6)
             }
             .buttonStyle(.plain)
         }
@@ -105,7 +138,7 @@ struct TodayView: View {
             SectionTitle(title: "Today", trailing: items.isEmpty ? nil : "\(items.count) event\(items.count == 1 ? "" : "s")")
             if items.isEmpty {
                 HStack {
-                    Image(systemName: "sparkles").foregroundStyle(Color.ember)
+                    Image(systemName: "sparkles").foregroundStyle(Color.roostInk3)
                     Text("Nothing scheduled. Enjoy the quiet.").foregroundStyle(Color.roostInk2)
                 }
                 .font(.subheadline)
@@ -123,9 +156,7 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var tasksSection: some View {
-        let today = LocalDateTime(now, in: .current).date.description
-        let open = store.tasks.filter { !$0.deleted && !$0.completed && !$0.due.isEmpty && String($0.due.prefix(10)) <= today && $0.parent.isEmpty }
-            .sorted { $0.due < $1.due }
+        let open = dueTasks(LocalDateTime(now, in: .current).date.description)
         if !open.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(title: "To-dos due", trailing: "\(open.count)")
@@ -169,24 +200,34 @@ struct TodayView: View {
         if !pinned.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(title: "Care info")
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(pinned) { c in
-                            NavigationLink(value: c) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Image(systemName: InfoCardDetail.icon(for: c)).foregroundStyle(Color.ember)
-                                    Text(c.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.roostInk).lineLimit(1)
-                                    Text(c.body).font(.caption).foregroundStyle(Color.roostInk2).lineLimit(3)
-                                }
-                                .frame(width: 180, height: 110, alignment: .topLeading)
-                                .roostCard()
-                            }
-                            .buttonStyle(.plain)
-                        }
+                if typeSize.isAccessibilitySize {
+                    // Large text (grandparents often use it): stack the cards so nothing clips.
+                    VStack(spacing: 12) { ForEach(pinned) { c in careCard(c, width: nil) } }
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 12) { ForEach(pinned) { c in careCard(c, width: 200) } }
                     }
                 }
             }
         }
+    }
+}
+
+extension TodayView {
+    fileprivate func careCard(_ c: InfoCard, width: CGFloat?) -> some View {
+        let preview = InfoCardDetail.preview(c)
+        return NavigationLink(value: c) {
+            VStack(alignment: .leading, spacing: 6) {
+                CardIcon(card: c)
+                Text(c.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.roostInk).lineLimit(2)
+                Text(preview.isEmpty ? "Tap to fill in" : preview).font(.caption)
+                    .foregroundStyle(preview.isEmpty ? Color.roostInk3 : Color.roostInk2).lineLimit(4)
+            }
+            .frame(width: width, alignment: .topLeading)
+            .frame(maxWidth: width == nil ? .infinity : nil, minHeight: 110, alignment: .topLeading)
+            .roostCard()
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -202,7 +243,7 @@ struct SyncBadge: View {
                 .help(msg)
         case .idle:
             if store.isLocal {
-                Label("On this phone", systemImage: "iphone").font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk3)
+                Label("Saved on this phone only", systemImage: "iphone").font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk3)
             } else {
                 EmptyView()
             }

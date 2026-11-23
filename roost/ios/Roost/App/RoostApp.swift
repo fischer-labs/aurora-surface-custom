@@ -31,6 +31,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         MainActor.assumeIsolated { ReminderScheduler.shared.configure() }
         BackgroundRefresh.register()
+        // Rounded navigation titles, like the Today greeting and the web headings.
+        let ink = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0xF5EFE7) : UIColor(hex: 0x1E1A16) }
+        let nav = UINavigationBar.appearance()
+        if let d = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .largeTitle).withSymbolicTraits(.traitBold)?.withDesign(.rounded) {
+            nav.largeTitleTextAttributes = [.font: UIFont(descriptor: d, size: 0), .foregroundColor: ink]
+        }
+        if let d = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .headline).withDesign(.rounded) {
+            nav.titleTextAttributes = [.font: UIFont(descriptor: d, size: 0), .foregroundColor: ink]
+        }
         return true
     }
 }

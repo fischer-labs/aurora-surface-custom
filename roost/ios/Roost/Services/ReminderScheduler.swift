@@ -95,8 +95,9 @@ final class ReminderScheduler: NSObject, UNUserNotificationCenterDelegate {
             guard let due = t.dueLocal else { continue }
             let mine = store.isLocal || notifyAll || (me.map { t.assignees.contains($0.id) } ?? false) || (t.assignees.isEmpty && t.createdBy == store.userId)
             guard mine else { continue }
-            // Due times are in the family's time zone; a due date reminds at 9 AM local.
-            let anchor = t.due.count > 10 ? due.toDate(in: familyTZ) : due.adding(minutes: 9 * 60).toDate(in: .current)
+            // Due times are in the family's time zone; for a due date, offsets count from local
+            // midnight (−540 = 9 AM on the day), like all-day events.
+            let anchor = t.due.count > 10 ? due.toDate(in: familyTZ) : due.toDate(in: .current)
             for m in t.reminders {
                 let fire = anchor.addingTimeInterval(TimeInterval(-m * 60))
                 guard fire > now, fire < horizon else { continue }

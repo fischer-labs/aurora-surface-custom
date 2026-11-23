@@ -24,8 +24,11 @@ extension Color {
     static let roostLine = dynamic(0xE8E0D4, 0x38302A)
     static let roostInk = dynamic(0x1E1A16, 0xF5EFE7)
     static let roostInk2 = dynamic(0x5F564B, 0xBFB4A6)
-    static let roostInk3 = dynamic(0x938878, 0x8C8174)
-    static let ember = dynamic(0xD4572A, 0xF0784C)
+    static let roostInk3 = dynamic(0x756A5D, 0x9C9182)
+    /// Ember for text, icons and links (AA on the paper background).
+    static let ember = dynamic(0xB4461E, 0xF0784C)
+    /// Ember for solid fills under white text (today circles, primary buttons).
+    static let emberFill = dynamic(0xC2491F, 0xC2491F)
     static let emberSoft = dynamic(0xFBE6DC, 0x3A2219)
     static let danger = dynamic(0xC93A3A, 0xF0706A)
 }
@@ -52,11 +55,25 @@ enum Palette: String, CaseIterable, Identifiable {
         }
     }
     var color: Color { Color(hex: hex) }
+    /// Darker shade for solid fills under text (≥4.6:1 with white); amber and lime keep their color with dark text.
+    var fill: Color {
+        switch self {
+        case .red: return Color(hex: 0xB3383C)
+        case .orange: return Color(hex: 0xC15310)
+        case .green: return Color(hex: 0x258054)
+        case .teal: return Color(hex: 0x0E8173)
+        case .cyan: return Color(hex: 0x047E97)
+        case .blue: return Color(hex: 0x0070C7)
+        case .pink: return Color(hex: 0xA7327C)
+        case .brown: return Color(hex: 0x876345)
+        case .amber, .lime, .indigo, .violet: return color
+        }
+    }
     var onColor: Color { (self == .amber || self == .lime) ? Color(hex: 0x1E1A16) : .white }
     /// Soft tint for event backgrounds.
     var soft: Color { color.opacity(0.16) }
 
-    static func named(_ s: String) -> Palette { Palette(rawValue: s) ?? .blue }
+    static func named(_ s: String) -> Palette { Palette(rawValue: s) ?? .brown }
 }
 
 extension Font {
@@ -75,12 +92,14 @@ struct Avatar: View {
     var body: some View {
         let p = Palette.named(member?.color ?? "brown")
         ZStack {
-            Circle().fill(p.color)
+            Circle().fill(p.fill)
             if let emoji = member?.emoji, !emoji.isEmpty {
                 Text(emoji).font(.system(size: size * 0.52))
             } else {
-                Text(member?.initials.uppercased() ?? "?")
-                    .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+                // Small avatars show one initial so it stays readable.
+                let initials = (member?.initials.uppercased() ?? "?")
+                Text(size < 26 ? String(initials.prefix(1)) : initials)
+                    .font(.system(size: size * (size < 26 ? 0.48 : 0.4), weight: .bold, design: .rounded))
                     .foregroundStyle(p.onColor)
             }
         }
@@ -96,7 +115,7 @@ struct AvatarStack: View {
     var max: Int = 4
 
     var body: some View {
-        HStack(spacing: -size * 0.32) {
+        HStack(spacing: -size * 0.15) {
             ForEach(Array(members.prefix(max))) { m in Avatar(member: m, size: size, ring: true) }
             if members.count > max {
                 Text("+\(members.count - max)").font(.caption2.weight(.bold)).foregroundStyle(Color.roostInk2)
@@ -140,7 +159,7 @@ struct EmptyState: View {
             Text(title).font(.rounded(.title3)).foregroundStyle(Color.roostInk)
             Text(message).font(.subheadline).foregroundStyle(Color.roostInk2).multilineTextAlignment(.center)
             if let action {
-                Button(action.title, action: action.run).buttonStyle(.borderedProminent).padding(.top, 4)
+                Button(action.title, action: action.run).buttonStyle(.borderedProminent).tint(.emberFill).padding(.top, 4)
             }
         }
         .padding(32)
