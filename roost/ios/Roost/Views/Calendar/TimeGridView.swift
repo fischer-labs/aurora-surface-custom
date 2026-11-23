@@ -53,34 +53,29 @@ struct TimeGridView: View {
         let windowEnd = cal.date(byAdding: .day, value: byPeople ? 1 : days, to: firstDay)!
         let items = CalItem.build(store: store, prefs: prefs, device: device, from: firstDay, to: windowEnd)
         GeometryReader { geo in
-            let colWidth = max((geo.size.width - TimeGridView.gutter) / CGFloat(cols.count), byPeople ? 92 : 40)
-            let contentWidth = TimeGridView.gutter + colWidth * CGFloat(cols.count)
+            // Columns always fit the screen width; only the hours scroll.
+            let colWidth = (geo.size.width - TimeGridView.gutter) / CGFloat(max(cols.count, 1))
             VStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        header(cols, colWidth: colWidth)
-                        allDayRow(cols, items: items, colWidth: colWidth)
-                        Divider()
-                        ScrollViewReader { proxy in
-                            ScrollView(.vertical, showsIndicators: false) {
-                                ZStack(alignment: .topLeading) {
-                                    hourLines(width: contentWidth)
-                                    ForEach(Array(cols.enumerated()), id: \.element.id) { idx, col in
-                                        columnBody(col, items: timedItems(for: col, in: items), width: colWidth)
-                                            .frame(width: colWidth, height: TimeGridView.hourHeight * 24)
-                                            .offset(x: TimeGridView.gutter + CGFloat(idx) * colWidth)
-                                    }
-                                }
-                                .frame(width: contentWidth, height: TimeGridView.hourHeight * 24, alignment: .topLeading)
+                header(cols, colWidth: colWidth)
+                allDayRow(cols, items: items, colWidth: colWidth)
+                Divider()
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        ZStack(alignment: .topLeading) {
+                            hourLines(width: geo.size.width)
+                            ForEach(Array(cols.enumerated()), id: \.element.id) { idx, col in
+                                columnBody(col, items: timedItems(for: col, in: items), width: colWidth, showNowDot: idx == 0 || !byPeople)
+                                    .frame(width: colWidth, height: TimeGridView.hourHeight * 24)
+                                    .offset(x: TimeGridView.gutter + CGFloat(idx) * colWidth)
                             }
-                            .onAppear { proxy.scrollTo(scrollHour, anchor: .top) }
-                            .onChange(of: anchor) { _, _ in proxy.scrollTo(scrollHour, anchor: .top) }
                         }
+                        .frame(width: geo.size.width, height: TimeGridView.hourHeight * 24, alignment: .topLeading)
                     }
-                    .frame(width: contentWidth)
+                    .onAppear { proxy.scrollTo(scrollHour, anchor: .top) }
+                    .onChange(of: anchor) { _, _ in proxy.scrollTo(scrollHour, anchor: .top) }
                 }
-                .scrollDisabled(contentWidth <= geo.size.width + 1)
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .gesture(DragGesture(minimumDistance: 40).onEnded { v in
             guard abs(v.translation.width) > abs(v.translation.height) * 1.5 else { return }
@@ -99,8 +94,8 @@ struct TimeGridView: View {
             ForEach(cols) { c in
                 VStack(spacing: 2) {
                     if let m = c.member {
-                        Avatar(member: m, size: 26)
-                        Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk).lineLimit(1)
+                        Avatar(member: m, size: min(26, colWidth - 8))
+                        Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk).lineLimit(1).minimumScaleFactor(0.6)
                     } else if byPeople {
                         Image(systemName: "house.fill").foregroundStyle(Color.ember).frame(height: 26)
                         Text(c.title).font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk)
@@ -187,7 +182,7 @@ struct TimeGridView: View {
         return d.formatted(.dateTime.hour())
     }
 
-    private func columnBody(_ col: Column, items: [CalItem], width: CGFloat) -> some View {
+    private func columnBody(_ col: Column, items: [CalItem], width: CGFloat, showNowDot: Bool) -> some View {
         let dayStart = col.day
         let minutes: (Date) -> Int = { d in max(0, min(1440, Int(d.timeIntervalSince(dayStart) / 60))) }
         let layout = DayLayout.layout(items.map { LayoutItem(id: $0.id, start: minutes($0.start), end: minutes($0.end)) })
@@ -213,7 +208,7 @@ struct TimeGridView: View {
             if cal.isDateInToday(dayStart) {
                 let y = CGFloat(minutes(Date())) / 60 * hh
                 HStack(spacing: 0) {
-                    Circle().fill(Color.ember).frame(width: 7, height: 7)
+                    Circle().fill(Color.ember).frame(width: 7, height: 7).opacity(showNowDot ? 1 : 0)
                     Rectangle().fill(Color.ember).frame(height: 1.5)
                 }
                 .offset(x: -3, y: y - 3.5)

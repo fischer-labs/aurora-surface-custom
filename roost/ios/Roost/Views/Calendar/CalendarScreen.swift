@@ -80,7 +80,7 @@ struct CalendarScreen: View {
         switch mode {
         case .year: return anchor.formatted(.dateTime.year())
         case .day, .people: return anchor.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-        default: return anchor.formatted(.dateTime.month(.wide).year())
+        default: return anchor.formatted(.dateTime.month(.abbreviated).year())
         }
     }
 
@@ -214,7 +214,7 @@ struct DayCell: View {
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(isToday ? Color.ember : (selected ? Color.emberSoft : Color.clear)))
             VStack(spacing: 2) {
-                ForEach(items.prefix(3)) { item in
+                ForEach(items.prefix(items.count > 3 ? 2 : 3)) { item in
                     Text(item.title)
                         .font(.system(size: 9, weight: .semibold))
                         .lineLimit(1)
@@ -224,13 +224,14 @@ struct DayCell: View {
                         .background(RoundedRectangle(cornerRadius: 3).fill(item.allDay ? item.color : item.color.opacity(item.isBusy ? 0.12 : 0.2)))
                 }
                 if items.count > 3 {
-                    Text("+\(items.count - 3)").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.roostInk3)
+                    Text("+\(items.count - 2) more").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.roostInk3)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(.top, 4).padding(.horizontal, 1)
-        .frame(height: 76)
+        .frame(height: 76, alignment: .top)
+        .clipped()
         .frame(maxWidth: .infinity)
         .background(selected ? Color.emberSoft.opacity(0.35) : Color.clear)
         .overlay(alignment: .top) { Rectangle().fill(Color.roostLine).frame(height: 0.5) }

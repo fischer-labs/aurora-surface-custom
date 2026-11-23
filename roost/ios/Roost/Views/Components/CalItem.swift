@@ -86,12 +86,14 @@ struct CalItemRow: View {
                     Text("all day").font(.caption.weight(.semibold)).foregroundStyle(Color.roostInk3)
                 } else {
                     Text(Fmt.time(item.start)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(Color.roostInk)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                     if item.task == nil {
                         Text(Fmt.time(item.end)).font(.caption.monospacedDigit()).foregroundStyle(Color.roostInk3)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                     }
                 }
             }
-            .frame(width: 62, alignment: .trailing)
+            .frame(width: 70, alignment: .trailing)
 
             RoundedRectangle(cornerRadius: 2).fill(item.isBusy ? Color.roostInk3 : item.color).frame(width: 4)
 
