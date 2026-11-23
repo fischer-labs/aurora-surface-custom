@@ -27,7 +27,7 @@ final class DeviceCalendars {
         if hasAccess { reload() }
     }
 
-    var hasAccess: Bool { status == .fullAccess || status == .authorized }
+    var hasAccess: Bool { status == .fullAccess }
 
     func requestAccess() async {
         do {
@@ -47,8 +47,14 @@ final class DeviceCalendars {
         revision += 1
     }
 
-    var grouped: [(source: String, calendars: [EKCalendar])] {
-        Dictionary(grouping: calendars, by: { $0.source.title }).map { (source: $0.key, calendars: $0.value) }.sorted { $0.source < $1.source }
+    struct Group: Identifiable {
+        var source: String
+        var calendars: [EKCalendar]
+        var id: String { source }
+    }
+
+    var grouped: [Group] {
+        Dictionary(grouping: calendars, by: { $0.source.title }).map { Group(source: $0.key, calendars: $0.value) }.sorted { $0.source < $1.source }
     }
 
     var writableCalendars: [EKCalendar] { calendars.filter(\.allowsContentModifications) }

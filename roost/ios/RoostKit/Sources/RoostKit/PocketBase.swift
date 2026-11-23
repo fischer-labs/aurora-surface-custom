@@ -11,6 +11,9 @@ public struct PBError: Error, LocalizedError, Sendable {
         if let first = fieldErrors.first { return "\(message) (\(first.key): \(first.value))" }
         return message
     }
+    public init(status: Int, message: String, fieldErrors: [String: String] = [:]) {
+        self.status = status; self.message = message; self.fieldErrors = fieldErrors
+    }
     public var isOffline: Bool { status == 0 }
     public var isAuth: Bool { status == 401 }
 }

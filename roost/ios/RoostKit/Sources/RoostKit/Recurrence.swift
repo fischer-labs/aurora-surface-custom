@@ -26,7 +26,7 @@ public struct RRule: Equatable, Sendable {
 
     public init(freq: Freq) { self.freq = freq }
 
-    static let dayCodes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+    public static let dayCodes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 
     public init?(_ string: String) {
         var freq: Freq?

@@ -111,7 +111,8 @@ final class AppModel {
         }
     }
 
-    func signIn(email: String, password: String) async throws {
+    /// Authenticates without opening a family (used before joining one).
+    func signInOnly(email: String, password: String) async throws {
         guard let url = baseURL else { throw PBError(status: 0, message: "Set your server address first.", fieldErrors: [:]) }
         let pb = PocketBaseClient(baseURL: url)
         let (token, profile) = try await pb.authWithPassword(email: email, password: password)
@@ -120,7 +121,12 @@ final class AppModel {
         user = profile
         remember(profile)
         localOnly = false
+    }
+
+    func signIn(email: String, password: String) async throws {
+        try await signInOnly(email: email, password: password)
         try await openFirstFamily()
+        if store == nil { throw PBError(status: 404, message: "This account isn't in a family yet. Use an invite code or start a new family.", fieldErrors: [:]) }
         if let store { await store.syncNow(); store.startRealtime() }
     }
 

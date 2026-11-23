@@ -233,7 +233,7 @@ enum Fmt {
             return days.isEmpty ? unit : "\(unit) on \(days.joined(separator: ", "))"
         case .monthly:
             if let d = r.byDay.first, let o = d.ordinal {
-                let ord = o == -1 ? "last" : ["", "1st", "2nd", "3rd", "4th", "5th"][min(o, 5)]
+                let ord = o < 0 ? (o == -1 ? "last" : "\(-o)th-to-last") : ["", "1st", "2nd", "3rd", "4th", "5th"][min(o, 5)]
                 return "Monthly on the \(ord) \(names[d.weekday])"
             }
             return r.interval > 1 ? "\(every)months" : "Monthly"
