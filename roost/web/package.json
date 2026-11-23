@@ -1,0 +1,31 @@
+{
+  "name": "roost-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Roost family organizer — web app (PWA). Served by roost-server at an unlisted path.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e": "node tests/e2e.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^1.70.0",
+    "pocketbase": "^0.28.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~6.0.3",
+    "vite": "^7.3.8",
+    "vitest": "^4.1.12"
+  }
+}
