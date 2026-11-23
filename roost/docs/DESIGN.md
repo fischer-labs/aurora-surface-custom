@@ -179,7 +179,10 @@ Cards for emergency contacts, pediatrician, allergies & medications, school info
 ## 9. Sync and offline
 
 - **Pull**: `updated > lastSync` per collection (tombstones included), then realtime SSE subscriptions for live changes.
-- **Push**: every mutation is applied locally first, appended to a persisted **outbox**, and flushed in order. Conflicts resolve last-writer-wins at the record level; the server echo is authoritative.
+- **Push**: every mutation is applied locally first, appended to a persisted **outbox** (stored on its own, written synchronously, tagged with the user), and flushed in order. Updates carry **only the changed fields** (`family` only on create), so concurrent edits to different fields merge and a stale copy can't resurrect deleted data; conflicts on the same field resolve last-writer-wins. An op being sent is never amended; later edits queue behind it, and the server echo is re-overlaid with still-queued edits.
+- **Errors**: offline, 408/429 and 5xx (a rebooting home server, a tunnel hiccup) are retried with backoff; 400/403/404 drop the op and show it in a "the server didn't accept…" notice; 401 renews the token, and if that fails the app asks to sign in again while keeping every unsent change.
+- **Sync races**: records touched locally or by realtime after a sync started are not overwritten by that sync's results. Realtime reconnects trigger a catch-up sync; the web also syncs every 5 minutes while visible.
+- **Removal**: when the server says you're no longer in the family, the cached data is wiped from the device.
 - **Local-only mode** (iOS): the app works fully without a server — useful on a plane or for a single-phone trial — and can be connected to a server later.
 - Notifications are scheduled **on each device** for the next 14 days of relevant reminders (iOS caps pending local notifications at 64; soonest first). Background app refresh keeps them current.
 
@@ -189,14 +192,18 @@ Cards for emergency contacts, pediatrician, allergies & medications, school info
 - Sign-up is closed: the first account bootstraps the family; everyone else needs an invite code (7-day expiry, single use, role pre-set).
 - Server-computed access, rule-level enforcement, same-family relation checks, read-only imports.
 - ICS feed tokens are 32-byte random, revocable per person; feeds respect the person's access.
+- The very first account needs a **setup code** printed in the server log; after that, sign-up is invite-only and each invite creates one account. PocketBase rate limits are on.
+- Subscription URLs (often someone's secret calendar address) are hidden from everyone who doesn't manage that calendar. Fetches refuse private, loopback, link-local, CGNAT/Tailscale and NAT64 addresses, re-checked at connect time.
+- Only a current owner can delete the family; `deleted`/`kind`/`archived` on shared resources are manage-only; people merely assigned a to-do can only complete it. JSON fields, time zones and due dates are validated, and ICS output can't be injected into.
+- AI assistant (MCP) keys are per person, stored as SHA-256 hashes, and act with exactly that person's access.
 - The web app lives at an unlisted path (`ROOST_WEB_PATH`, e.g. `/h/k7q2m9x4/`), sends `X-Robots-Tag: noindex` and `robots.txt: Disallow: /`, and the server root reveals nothing.
 
 ## 11. Phase 2 (designed, not built)
 - Direct Google/Microsoft OAuth two-way sync (server-side, refresh tokens encrypted at rest).
 - APNs push from the server for assignment notifications and server-timed reminders.
-- WidgetKit (Today + Groceries), App Intents ("Add eggs to groceries" via Siri / Apple Intelligence), Live Activity for "pickup in 15 min".
+- WidgetKit (Today + Groceries), Live Activity for "pickup in 15 min". (App Intents for Siri/Shortcuts are built.)
 - Meal planner → grocery list, chore points for kids.
-- An MCP endpoint so home-lab agents can read/write the family calendar and lists.
+- (Built: an MCP endpoint at `/api/roost/mcp` so home-lab agents can read/write the family calendar, to-dos and groceries — see DEPLOY.md §5.)
 
 ## 12. Visual design
 
@@ -208,13 +215,18 @@ Warm, calm and legible — closer to a well-made paper planner than a dashboard.
 | `surface` | `#FFFFFF` | `#1D1915` |
 | `surface2` | `#F3EEE6` | `#27221C` |
 | `line` | `#E8E0D4` | `#38302A` |
-| `ink` / `ink2` / `ink3` | `#1E1A16` / `#5F564B` / `#938878` | `#F5EFE7` / `#BFB4A6` / `#8C8174` |
-| `accent` (ember) | `#D4572A` | `#F0784C` |
+| `ink` / `ink2` / `ink3` | `#1E1A16` / `#5F564B` / `#756A5D` | `#F5EFE7` / `#BFB4A6` / `#9C9182` |
+| `accent` (ember: text, icons, links) | `#B4461E` | `#F0784C` |
+| `accentFill` (solid fills under white text) | `#C2491F` | `#C2491F` |
 | `accentSoft` | `#FBE6DC` | `#3A2219` |
 
-Person colors (12, contrast-checked for white text except amber/lime which use dark text): red `#E5484D`, orange `#F76B15`, amber `#FFB224`, lime `#99D52A`, green `#30A46C`, teal `#12A594`, cyan `#05A2C2`, blue `#0090FF`, indigo `#3E63DD`, violet `#8E4EC6`, pink `#D6409F`, brown `#AD7F58`.
+All text pairs meet WCAG AA (≥4.5:1): ink3 is 4.9 on the page and 4.6 on surface2; ember is 5.1 on the page; white on `accentFill` is 4.9.
 
-Type: SF Pro Rounded for titles and numerals, SF Pro for body (web: `ui-rounded`/system stack, no web fonts → instant, offline). Radii 10/14/22. Generous touch targets (≥44 pt). Motion: short spring transitions, respects Reduce Motion.
+**Ember means action, today/now, and selection — nothing else.** Icons on care cards, the "Everyone" column, heat maps and priority marks use neutral ink or `danger`.
+
+Person colors (12) are used as-is for bars, dots, rings and tints: red `#E5484D`, orange `#F76B15`, amber `#FFB224`, lime `#99D52A`, green `#30A46C`, teal `#12A594`, cyan `#05A2C2`, blue `#0090FF`, indigo `#3E63DD`, violet `#8E4EC6`, pink `#D6409F`, brown `#AD7F58`. Wherever text sits on a person color (avatars, all-day chips, the Up next card) a darker **fill** shade is used — red `#B3383C`, orange `#C15310`, green `#258054`, teal `#0E8173`, cyan `#047E97`, blue `#0070C7`, pink `#A7327C`, brown `#876345`; indigo and violet as-is — all 4.6–6.2:1 with white. Amber and lime keep their color with dark ink text (9.6:1). Orange is assigned to people last because it sits close to ember. Dark mode raises event tints to 30% and adds a person-color bar so events stay distinct.
+
+Type: SF Pro Rounded for titles (including navigation titles) and numerals, SF Pro for body (web: `ui-rounded`/system stack, no web fonts → instant, offline). Dynamic Type throughout; at accessibility sizes Today's care cards stack instead of scrolling sideways. Radii 10/14/22. Touch targets ≥44 pt (check circles get invisible hit areas); in the store, tapping anywhere on a grocery row checks it off. Phone month view shows colored bars (the day list carries the details). Motion: short spring transitions, respects Reduce Motion.
 
 ## 13. Testing strategy
 

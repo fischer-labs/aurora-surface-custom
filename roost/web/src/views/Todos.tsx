@@ -8,7 +8,7 @@ import {
 import { newId, type ListRec, type TaskRec } from '../data/models';
 import { parseQuickAdd } from '../core/quickadd';
 import { LocalDateTime, localTZ } from '../core/localdate';
-import { AvatarStack, ColorPicker, Empty, Field, Modal, PeoplePicker, Seg, colorVar } from '../ui/kit';
+import { AvatarStack, ColorPicker, Empty, Field, Modal, PeoplePicker, Seg, colorVar, fillVar, textOn } from '../ui/kit';
 import { PRESETS, REMINDERS_ALLDAY, REMINDERS_TIMED, detectPreset, dueText, presetLabel, presetRule, recurrenceText, reminderText, type RepeatPreset } from '../ui/format';
 import { resolveMembers } from './QuickAdd';
 import { SharingEditor } from './Family';
@@ -55,7 +55,7 @@ export function Todos() {
           <div className="smart">
             {SMART.map(({ key, title, icon: Icon, color }) => (
               <button key={key} className={!list && smart === key ? 'on' : ''} onClick={() => { setSmart(key); nav('/todos'); }}>
-                <div className="top"><i style={{ background: colorVar(color) }}><Icon size={16} /></i><b>{smartTasks(key, s).length}</b></div>
+                <div className="top"><i style={{ background: fillVar(color), opacity: key === 'overdue' && !smartTasks(key, s).length ? 0.35 : 1 }}><Icon size={16} /></i><b>{smartTasks(key, s).length}</b></div>
                 <span>{title}</span>
               </button>
             ))}
@@ -73,7 +73,7 @@ export function Todos() {
               const Icon = l.kind === 'packing' ? Luggage : ListChecks;
               return (
                 <button key={l.id} className={list?.id === l.id ? 'on' : ''} onClick={() => nav(`/todos/${l.id}`)}>
-                  <i style={{ background: colorVar(l.color) }}><Icon size={14} /></i>{l.name}<span className="n">{n || ''}</span>
+                  <i style={{ background: fillVar(l.color), color: textOn(l.color) }}><Icon size={14} /></i>{l.name}<span className="n">{n || ''}</span>
                 </button>
               );
             })}

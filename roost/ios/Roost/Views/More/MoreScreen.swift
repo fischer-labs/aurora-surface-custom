@@ -503,6 +503,21 @@ struct SettingsView: View {
                 Text("Reminders are scheduled on this iPhone for the next two weeks and refresh whenever Roost syncs.")
                     .font(.footnote).foregroundStyle(Color.roostInk3)
             }
+            if !store.rejected.isEmpty {
+                Section {
+                    ForEach(store.rejected) { r in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(r.what).font(.subheadline.weight(.semibold))
+                            Text(r.message).font(.caption).foregroundStyle(Color.roostInk2)
+                        }
+                    }
+                    Button("OK") { store.dismissRejected() }
+                } header: {
+                    Text("Not saved")
+                } footer: {
+                    Text("The server didn't accept these changes (usually a permission your role doesn't have). Everything else synced.")
+                }
+            }
             Section("Account") {
                 if let u = app.user { LabeledContent("Signed in as", value: u.name.isEmpty ? u.email : u.name) }
                 if !store.isLocal { LabeledContent("Server", value: app.serverHost) }

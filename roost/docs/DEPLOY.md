@@ -155,12 +155,12 @@ For App Review / external testing, give reviewers demo access: create an invite 
 1. Open **Family → People & roles → Invite**. Pick a role:
    - **Parent** — everything except removing the owner.
    - **Caregiver** (nanny/sitter) — family + kids' calendars, groceries, to-dos assigned to them, care info; sees parents' personal calendars as **Busy**.
-   - **Family** (grandparents) — family calendar and care info, read-only.
+   - **Relative** (grandparents, aunts & uncles) — family calendar and care info, read-only.
    - **Kid** — family calendar, groceries, their own to-dos.
 2. Send the code (Copy/Email invite). It works once and expires after 7 days.
    - **iPhone**: install from TestFlight → “I have an invite code”.
    - **Android / computer**: open `https://family.example.com/h/9f3c1a7e2b/?code=K7QM-2XPD`.
-3. Kids without phones: **Add a profile (no login)** — you can still assign events and to-dos to them.
+3. Kids without phones: **Add child (no login)** — you can still assign events and to-dos to them.
 4. Fine-tune any calendar, list or care card under its **Who can see it** section (per role, plus per-person exceptions).
 
 ### Connect Outlook, Gmail and iCloud
@@ -168,6 +168,27 @@ For App Review / external testing, give reviewers demo access: create an invite 
 - **On iPhone** (two-way, nothing leaves the phone): Settings → Apps → Calendar → Calendar Accounts → add Outlook/Exchange and Google accounts. Then in Roost: Calendar → Filter → “Show my Outlook, Gmail & iCloud calendars”.
 - **Into Roost for everyone** (read-only): Family → Calendars → **Subscribe to a link** — paste Google's “Secret address in iCal format”, Outlook's published ICS link, or a school/team feed. Refreshes every 30 minutes.
 - **Roost into Google/Outlook/Apple** (read-only): Family → Calendars → **Get my feed link** → Add to Google / Outlook / Apple. Google refreshes every few hours; Outlook can take up to a day.
+
+## 5. Connect AI assistants (MCP)
+
+Roost speaks the [Model Context Protocol](https://modelcontextprotocol.io) at `https://family.example.com/api/roost/mcp` (Streamable HTTP, JSON responses). Each person creates their own key in **Family → Settings → AI assistants**; the assistant then has exactly that person's access (a nanny's assistant sees busy blocks, not the parents' appointments). Keys are shown once, stored only as hashes, and revocable from the same screen.
+
+Tools: `family_overview`, `list_events` (recurring events expanded), `add_event`, `list_tasks`, `add_task`, `complete_task`, `grocery_list` (by aisle), `add_groceries` (parsed, sorted into aisles, merged), `check_off_groceries`. Changes appear on everyone's phones in real time.
+
+```bash
+# Claude Code
+claude mcp add --transport http roost https://family.example.com/api/roost/mcp \
+  --header "Authorization: Bearer rk_…"
+```
+
+```json
+// Claude Desktop (claude_desktop_config.json), via the mcp-remote bridge
+{ "mcpServers": { "roost": { "command": "npx",
+  "args": ["-y", "mcp-remote", "https://family.example.com/api/roost/mcp", "--header", "Authorization:${ROOST_KEY}"],
+  "env": { "ROOST_KEY": "Bearer rk_…" } } } }
+```
+
+Local-model agents (Open WebUI, LM Studio, Goose, your own) can use the same URL and header. On the LAN or over Tailscale you can point them at `http://<server>:8090/api/roost/mcp`.
 
 ---
 

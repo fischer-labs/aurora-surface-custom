@@ -24,11 +24,13 @@ iPhone screenshots from the Simulator are in [`docs/screenshots/ios/`](docs/scre
 
 **Groceries** — type or paste a whole list; lines are parsed (`2 lbs chicken breast`, `milk x2`, `½ dozen eggs`), sorted into 20 aisles by a 2,374-term dictionary with head-noun matching (“chicken broth” → Pantry, “ice cream” → Frozen), duplicates merge, corrections are learned for the whole household, aisles follow **your store's order**, and “buy again” suggestions. Unknown items go to Apple's on-device model (iOS 26+) or your own local LLM.
 
-**Roles** — Owner, Parent, Caregiver, Family (grandparents), Kid; kids can be profiles without logins. Every calendar, list and care card can be fine-tuned per role and per person, including **Busy-only** visibility. Enforced on the server.
+**Roles** — Owner, Parent, Caregiver, Relative (grandparents, aunts & uncles), Kid; kids can be profiles without logins. Every calendar, list and care card can be fine-tuned per role and per person, including **Busy-only** visibility. Enforced on the server.
 
 **Care info** — pediatrician, allergies, bedtime routine, Wi-Fi… with tap-to-call and maps, pinned to Today.
 
-**Works offline** — every change is saved locally first and synced through an outbox; realtime updates when online.
+**Works offline** — every change is saved locally first and synced through an outbox that survives restarts, expired sign-ins and a rebooting home server; only the fields you changed are sent, so two people editing at once don't overwrite each other. Realtime updates when online.
+
+**AI assistants (MCP)** — each person can create a key (Family → Settings) that lets Claude, Claude Code or an agent on your home lab read the calendar and add events, to-dos and groceries over the Model Context Protocol, with exactly that person's access. Keys are hashed at rest and revocable.
 
 ## Layout
 
@@ -72,10 +74,11 @@ CI (`.github/workflows/roost-ios.yml`) builds the iOS app on a GitHub macOS runn
 
 | Area | State |
 |---|---|
-| Server | Complete; `go test -race` passes |
-| Web app | Complete; unit + E2E pass, no console errors |
-| iOS app | Complete; builds clean on Xcode 26 in CI. **Not yet run on a physical device** — please smoke-test on your iPhone. |
+| Server | Complete; `go test -race` passes (roles end-to-end over HTTP, hardening, MCP, ICS, recurrence fixtures) |
+| Web app | Complete; 255 unit tests + Playwright E2E (owner, nanny, grandma, realtime, MCP, edits) pass, no console errors |
+| iOS app | Complete; builds clean on Xcode 26 in CI with Simulator screenshots. **Not yet run on a physical device** — please smoke-test on your iPhone. |
+| Reviews | An independent code/security review (25 findings) and a UX/accessibility review (17 findings) were run; all findings are addressed — see `docs/REVIEW.md` |
 | Deploy | Docker/compose/Caddy/systemd/fastlane ready; needs your server, Apple team ID and bundle ID |
-| Phase 2 (designed in DESIGN.md §11) | Direct Google/Microsoft OAuth two-way sync, APNs server push, widgets, Siri/App Intents, meal planning, MCP endpoint for home-lab agents |
+| Phase 2 (designed in DESIGN.md §11) | Direct Google/Microsoft OAuth two-way sync, APNs server push, widgets, Live Activities, meal planning |
 
 Licensed MIT, like the rest of this repository.

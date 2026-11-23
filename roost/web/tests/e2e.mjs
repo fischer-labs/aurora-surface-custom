@@ -41,8 +41,9 @@ function at(dayOffset, h, m = 0) {
 const weekdayOffset = (wd) => ((wd - new Date().getDay() + 7) % 7); // next given weekday (0 = today if matching)
 
 const browser = await chromium.launch();
-const desktop = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, timezoneId: 'America/Chicago', locale: 'en-US' };
-const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, timezoneId: 'America/Chicago', locale: 'en-US' };
+// reducedMotion: screenshots never catch a modal mid-fade (the CSS honors it).
+const desktop = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, timezoneId: 'America/Chicago', locale: 'en-US', reducedMotion: 'reduce' };
+const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, timezoneId: 'America/Chicago', locale: 'en-US', reducedMotion: 'reduce' };
 const shot = (page, name) => page.screenshot({ path: SHOTS + name + '.jpg', type: 'jpeg', quality: 82 });
 
 try {
