@@ -1,0 +1,26 @@
+# Roost on a home-lab box or a small VPS.
+#   cp deploy/example.env .env   # then edit
+#   docker compose up -d --build
+#   docker compose --profile tunnel up -d   # also start the Cloudflare Tunnel
+services:
+  roost:
+    build: .
+    image: roost:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ROOST_WEB_PATH: ${ROOST_WEB_PATH:?Set ROOST_WEB_PATH in .env (run deploy/new-web-path.sh)}
+    volumes:
+      - ./pb_data:/app/pb_data
+    ports:
+      - "127.0.0.1:8090:8090"   # localhost only: put Caddy or the tunnel in front
+
+  # Optional: publish Roost through Cloudflare Tunnel without opening router ports.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2025.10.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on: [roost]

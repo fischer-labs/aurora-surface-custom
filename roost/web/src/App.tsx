@@ -15,7 +15,10 @@ function basename(): string {
   const fromConfig = window.ROOST_CONFIG?.basePath;
   if (fromConfig) return fromConfig.replace(/\/$/, '');
   const base = document.querySelector('base')?.getAttribute('href');
-  return base ? base.replace(/\/$/, '') : '';
+  if (base) return base.replace(/\/$/, '');
+  // Built with `vite build --base=/hidden/path/` for hosting on another site.
+  const viteBase = import.meta.env.BASE_URL;
+  return viteBase.startsWith('/') ? viteBase.replace(/\/$/, '') : '';
 }
 
 const NAV = [

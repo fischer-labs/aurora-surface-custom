@@ -1,0 +1,4 @@
+# Values come from the environment so nothing personal is committed.
+app_identifier(ENV["ROOST_BUNDLE_ID"] || "com.example.roost")
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+team_id(ENV["ROOST_TEAM_ID"]) if ENV["ROOST_TEAM_ID"]

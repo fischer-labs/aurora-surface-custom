@@ -1,0 +1,23 @@
+# systemd unit for running the roost-server binary directly (no Docker).
+#   sudo cp roost-server /usr/local/bin/ && sudo mkdir -p /var/lib/roost /opt/roost/web
+#   sudo cp -r web/dist/* /opt/roost/web/ && sudo cp deploy/roost.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now roost
+[Unit]
+Description=Roost family organizer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=roost
+Environment=ROOST_WEB_DIR=/opt/roost/web
+EnvironmentFile=-/etc/roost.env
+ExecStart=/usr/local/bin/roost-server serve --http=127.0.0.1:8090 --dir=/var/lib/roost
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

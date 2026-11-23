@@ -1,0 +1,42 @@
+# Server + web app tests for Roost (roost/server, roost/web). Only runs for the
+# Roost development branches; independent of the Aurora image build.
+name: Roost server & web
+
+on:
+  push:
+    branches: ['claude/family-org-app-**']
+    paths: ['roost/server/**', 'roost/web/**', 'roost/shared/**', '.github/workflows/roost-web.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: roost-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27.x', cache-dependency-path: roost/server/go.sum }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: roost/web/package-lock.json }
+      - name: Server tests
+        working-directory: roost/server
+        run: go vet ./... && go test -race ./...
+      - name: Web unit tests + typecheck
+        working-directory: roost/web
+        run: npm ci && npx tsc --noEmit && npm test
+      - name: Taxonomy check
+        run: python3 roost/shared/tools/taxonomy_check.py
+      - name: End-to-end (Playwright, real server)
+        working-directory: roost/web
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+          tests/run-e2e.sh
+      - name: Upload E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: roost-web-screenshots, path: roost/docs/screenshots, retention-days: 14 }
