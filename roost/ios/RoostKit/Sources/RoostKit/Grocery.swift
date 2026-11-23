@@ -96,6 +96,30 @@ public struct ParsedGrocery: Equatable, Sendable {
 }
 
 public enum GroceryParser {
+    /// Spoken lists ("milk, eggs and bread") → one item per comma, keeping known
+    /// "X and Y" products whole ("half and half", "mac and cheese", "peas and carrots").
+    public static func splitSpokenList(_ text: String, taxonomy: GroceryTaxonomy = .bundled) -> String {
+        let knownAnd = taxonomy.index.keys.filter { $0.contains(" and ") }
+        func isKnown(_ phrase: String) -> Bool {
+            let n = " " + TextNorm.normalize(phrase) + " "
+            return knownAnd.contains { n.hasSuffix(" " + $0 + " ") }
+        }
+        var out: [String] = []
+        for chunk in text.split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" }) {
+            let parts = String(chunk).replacingOccurrences(of: " and ", with: "\u{1}", options: .caseInsensitive)
+                .split(separator: "\u{1}").map { $0.trimmingCharacters(in: .whitespaces) }
+            var i = 0
+            while i < parts.count {
+                var end = i
+                for j in (i + 1)..<max(parts.count, i + 1) where isKnown(parts[i...j].joined(separator: " and ")) { end = j }
+                let item = parts[i...end].joined(separator: " and ")
+                if !item.isEmpty { out.append(item) }
+                i = end + 1
+            }
+        }
+        return out.joined(separator: ", ")
+    }
+
     static let units: [String: String] = {
         var m: [String: String] = [:]
         let groups: [(String, [String])] = [

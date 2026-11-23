@@ -27,17 +27,41 @@ final class FamilyStore {
     var syncState: SyncState = .idle
     var lastSync: Date?
     private(set) var outbox: [OutboxOp]
+    /// The session expired; unsent changes are kept until the same person signs in again.
+    var needsSignIn = false
+    struct Rejected: Identifiable { let id = UUID(); var what: String; var message: String }
+    /// Changes the server refused, newest first.
+    var rejected: [Rejected] = []
+
+    /// Called when the server says we're no longer in this family.
+    @ObservationIgnored var onRemovedFromFamily: (() -> Void)?
+    /// Called when the session can't be renewed.
+    @ObservationIgnored var onSessionExpired: (() -> Void)?
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var flushing = false
+    @ObservationIgnored private var inFlight: String?
     @ObservationIgnored private var realtime: RealtimeClient?
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var resyncTask: Task<Void, Never>?
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var backoff: Double = 2
+    /// Records changed here (or echoed back) and when, so a sync in flight can't overwrite newer local data.
+    @ObservationIgnored private var touched: [String: Date] = [:]
+    @ObservationIgnored private var syncStartedAt = Date.distantPast
 
     init(snapshot s: Snapshot, userId: String, remote: PocketBaseClient?) {
         self.userId = userId
         self.remote = remote
         family = s.family; members = s.members; calendars = s.calendars; events = s.events; busy = s.busy
         lists = s.lists; tasks = s.tasks; grocery = s.grocery; learned = s.learned; infoCards = s.infoCards
-        invites = s.invites; feeds = s.feeds; outbox = s.outbox; lastSync = s.lastSync
+        invites = s.invites; feeds = s.feeds; lastSync = s.lastSync
+        outbox = Snapshot.loadOutbox(familyId: s.family.id, user: userId) ?? s.outbox
+    }
+
+    private func persistOutbox() {
+        guard !isLocal else { return }
+        Snapshot.writeOutbox(familyId: family.id, user: userId, ops: outbox)
     }
 
     var isLocal: Bool { remote == nil }
@@ -75,11 +99,16 @@ final class FamilyStore {
     func colorName(for e: CalendarEvent, byPerson: Bool = true) -> String {
         if !e.color.isEmpty { return e.color }
         if byPerson, let m = e.members.first.flatMap(member) { return m.color }
-        return calendar(e.calendar)?.color ?? "orange"
+        return calendar(e.calendar)?.color ?? "brown"
     }
 
+    /// Calendars and lists that still exist (items in removed ones are hidden and not reminded).
+    var liveCalendarIds: Set<String> { Set(calendars.filter { !$0.deleted }.map(\.id)) }
+    var liveListIds: Set<String> { Set(lists.filter { !$0.deleted }.map(\.id)) }
+
     func occurrences(from: Date, to: Date, hiddenCalendars: Set<String> = [], people: Set<String> = [], includeBusy: Bool = true) -> [Occurrence] {
-        var src = events.filter { !$0.deleted && !hiddenCalendars.contains($0.calendar) }
+        let live = liveCalendarIds
+        var src = events.filter { !$0.deleted && live.contains($0.calendar) && !hiddenCalendars.contains($0.calendar) }
         if includeBusy { src += busy.filter { !hiddenCalendars.contains($0.calendar) } }
         if !people.isEmpty {
             src = src.filter { e in e.members.contains(where: { people.contains($0) }) || (!e.driver.isEmpty && people.contains(e.driver)) }
@@ -89,7 +118,8 @@ final class FamilyStore {
 
     func tasksDue(on day: Date) -> [TaskItem] {
         let key = LocalDateTime(day, in: .current).date.description
-        return tasks.filter { !$0.deleted && !$0.completed && $0.due.hasPrefix(key) }
+        let live = liveListIds
+        return tasks.filter { !$0.deleted && !$0.completed && live.contains($0.list) && $0.due.hasPrefix(key) }
     }
 
     // MARK: - Persistence
@@ -156,95 +186,222 @@ final class FamilyStore {
 
     private func enqueue(_ collection: String, id: String, kind: OutboxOp.Kind, body: JSON) {
         guard !isLocal else { saveSoon(); return }
-        // Fold updates into a pending create/update of the same record.
-        if kind == .update, let i = outbox.lastIndex(where: { $0.recordId == id && $0.collection == collection && $0.kind != .delete }) {
+        touched[id] = Date()
+        // Fold into the latest queued op for this record — never into the one being sent right now.
+        var target: Int?
+        if kind == .update, let j = outbox.lastIndex(where: { $0.recordId == id && $0.collection == collection }),
+           outbox[j].kind != .delete, outbox[j].id != inFlight {
+            target = j
+        }
+        if let i = target {
             outbox[i].body.merge(body) { _, new in new }
         } else {
             outbox.append(OutboxOp(collection: collection, recordId: id, kind: kind, body: body))
         }
+        persistOutbox()
         saveSoon()
         Task { await flush() }
     }
 
+    static func same(_ a: Any?, _ b: Any?) -> Bool {
+        func enc(_ v: Any?) -> Data? { try? JSONSerialization.data(withJSONObject: [v ?? NSNull()], options: [.sortedKeys]) }
+        return enc(a) == enc(b)
+    }
+
+    /// Creates send everything; updates send only changed fields (never `family`), so a stale
+    /// copy on this phone can't overwrite someone else's newer edits.
+    private func commit(_ collection: String, id: String, old: JSON?, new: JSON) {
+        guard let old else { enqueue(collection, id: id, kind: .create, body: new); return }
+        var diff: JSON = [:]
+        for (k, v) in new where k != "family" && !FamilyStore.same(old[k], v) { diff[k] = v }
+        if !diff.isEmpty { enqueue(collection, id: id, kind: .update, body: diff) }
+    }
+
+    /// Re-applies changes still queued for a record on top of what the server returned.
+    private func withPending(_ rec: JSON, collection: String) -> JSON {
+        var out = rec
+        for o in outbox where o.collection == collection && o.recordId == rec.s("id") && o.kind != .delete {
+            out.merge(o.body) { _, new in new }
+        }
+        return out
+    }
+
+    private func describe(_ op: OutboxOp) -> String {
+        let noun = ["events": "event", "tasks": "to-do", "groceryItems": "grocery item", "lists": "list", "calendars": "calendar",
+                    "infoCards": "card", "memberships": "person"][op.collection] ?? "change"
+        let name = op.body.s("title").isEmpty ? op.body.s("name") : op.body.s("title")
+        return name.isEmpty ? "a \(noun) change" : "\(noun) “\(name)”"
+    }
+
+    private func scheduleRetry() {
+        retryTask?.cancel()
+        let delay = backoff
+        backoff = min(backoff * 2, 60)
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.flush()
+        }
+    }
+
+    /// Tries to renew an expired token without bothering the user.
+    private func renewSession() async -> Bool {
+        guard let remote else { return false }
+        do {
+            _ = try await remote.authRefresh()
+            Keychain.set("token", remote.token ?? "")
+            return true
+        } catch { return false }
+    }
+
     func flush() async {
-        guard let remote, !flushing else { return }
+        guard let remote, !flushing, !needsSignIn else { return }
         flushing = true
-        defer { flushing = false }
+        defer { flushing = false; inFlight = nil }
         while let op = outbox.first {
+            inFlight = op.id
             do {
+                var rec: JSON?
                 switch op.kind {
                 case .create:
                     var body = op.body
                     body["id"] = op.recordId
                     do {
-                        apply(try await remote.create(op.collection, body), collection: op.collection)
+                        rec = try await remote.create(op.collection, body)
                     } catch let e as PBError where e.fieldErrors["id"] != nil {
                         // Already created (a retry after a lost response): update instead.
-                        apply(try await remote.update(op.collection, id: op.recordId, op.body), collection: op.collection)
+                        rec = try await remote.update(op.collection, id: op.recordId, op.body)
                     }
                 case .update:
-                    apply(try await remote.update(op.collection, id: op.recordId, op.body), collection: op.collection)
+                    rec = try await remote.update(op.collection, id: op.recordId, op.body)
                 case .delete:
                     try await remote.delete(op.collection, id: op.recordId)
                 }
-                outbox.removeFirst()
+                inFlight = nil
+                outbox.removeAll { $0.id == op.id }
+                persistOutbox()
+                if let rec {
+                    touched[op.recordId] = Date()
+                    apply(withPending(rec, collection: op.collection), collection: op.collection)
+                }
                 if syncState == .offline { syncState = .idle }
-            } catch let e as PBError where e.isOffline {
-                syncState = .offline
-                break
-            } catch let e as PBError {
-                // The server refused (permissions/validation): drop it and resync that collection.
-                outbox.removeFirst()
-                syncState = .error(e.errorDescription ?? e.message)
-                Task { await syncNow() }
+                backoff = 2
+            } catch let e as PBError where e.isAuth {
+                inFlight = nil
+                if await renewSession() { continue }
+                needsSignIn = true
+                syncState = .error("Please sign in again to send your changes.")
+                saveSoon()
+                onSessionExpired?()
+                return
+            } catch let e as PBError where e.isDefinitive {
+                // The server refused (permissions/validation): drop it, say so, and restore its copy.
+                inFlight = nil
+                outbox.removeAll { $0.id == op.id }
+                persistOutbox()
+                rejected.insert(Rejected(what: describe(op), message: e.errorDescription ?? e.message), at: 0)
+                if rejected.count > 20 { rejected.removeLast(rejected.count - 20) }
+                syncState = .error("Couldn't save \(describe(op)).")
+                if !outbox.contains(where: { $0.recordId == op.recordId }) {
+                    touched[op.recordId] = nil
+                    Task { await self.restore(op) }
+                }
             } catch {
-                outbox.removeFirst()
+                // Offline, timeouts, 5xx while the home server restarts: keep it and retry.
+                inFlight = nil
+                syncState = .offline
+                scheduleRetry()
+                saveSoon()
+                return
             }
         }
         saveSoon()
+    }
+
+    private func restore(_ op: OutboxOp) async {
+        guard let remote else { return }
+        do {
+            if let j = try await remote.send("GET", "api/collections/\(op.collection)/records/\(op.recordId)") as? JSON, !j.s("id").isEmpty {
+                apply(j, collection: op.collection)
+            }
+        } catch let e as PBError where e.status == 404 && op.kind == .create {
+            remove(id: op.recordId, collection: op.collection)
+        } catch {}
+        saveSoon()
+    }
+
+    func dismissRejected() {
+        rejected = []
+        syncState = outbox.isEmpty ? .idle : .offline
     }
 
     // MARK: - Sync
 
     static let synced = ["calendars", "events", "lists", "tasks", "groceryItems", "groceryLearned", "infoCards"]
 
+    /// One sync at a time; callers during a sync wait for it.
     func syncNow() async {
-        guard let remote else { return }
+        if let t = syncTask { await t.value; return }
+        let t = Task { await self.doSync() }
+        syncTask = t
+        await t.value
+        syncTask = nil
+    }
+
+    private func doSync() async {
+        guard let remote, !needsSignIn else { return }
         syncState = .syncing
         await flush()
+        guard !needsSignIn else { return }
+        let started = Date()
+        syncStartedAt = started
         do {
-            let fam = try await remote.send("GET", "api/collections/families/records/\(family.id)") as? JSON ?? [:]
+            let fam: JSON
+            do {
+                fam = try await remote.send("GET", "api/collections/families/records/\(family.id)") as? JSON ?? [:]
+            } catch let e as PBError where e.status == 404 || e.status == 403 {
+                // We were removed from this family: forget what we cached.
+                onRemovedFromFamily?()
+                return
+            }
+            guard fam.s("id") == family.id else { throw PBError(status: 0, message: "Unexpected answer from the server.", fieldErrors: [:]) }
             family = Family(json: fam)
             let f = "family = \(PocketBaseClient.quote(family.id))"
             members = try await remote.list("memberships", filter: f, sort: "sortOrder,created").map(Member.init(json:))
             let pendingIds = Set(outbox.map(\.recordId))
-            calendars = merge(calendars, try await remote.list("calendars", filter: f + " && deleted = false").map(FamilyCalendar.init(json:)), pendingIds)
-            events = merge(events, try await remote.list("events", filter: f + " && deleted = false").map(CalendarEvent.init(json:)), pendingIds)
-            lists = merge(lists, try await remote.list("lists", filter: f + " && deleted = false").map(TaskList.init(json:)), pendingIds)
-            tasks = merge(tasks, try await remote.list("tasks", filter: f + " && deleted = false").map(TaskItem.init(json:)), pendingIds)
-            grocery = merge(grocery, try await remote.list("groceryItems", filter: f + " && deleted = false").map(GroceryItem.init(json:)), pendingIds)
+            let keep: (String) -> Bool = { id in pendingIds.contains(id) || (self.touched[id] ?? .distantPast) >= started }
+            calendars = merge(calendars, try await remote.list("calendars", filter: f + " && deleted = false").map(FamilyCalendar.init(json:)), keep)
+            events = merge(events, try await remote.list("events", filter: f + " && deleted = false").map(CalendarEvent.init(json:)), keep)
+            lists = merge(lists, try await remote.list("lists", filter: f + " && deleted = false").map(TaskList.init(json:)), keep)
+            tasks = merge(tasks, try await remote.list("tasks", filter: f + " && deleted = false").map(TaskItem.init(json:)), keep)
+            grocery = merge(grocery, try await remote.list("groceryItems", filter: f + " && deleted = false").map(GroceryItem.init(json:)), keep)
             learned = try await remote.list("groceryLearned", filter: f).map(LearnedTerm.init(json:))
-            infoCards = merge(infoCards, try await remote.list("infoCards", filter: f + " && deleted = false").map(InfoCard.init(json:)), pendingIds)
+            infoCards = merge(infoCards, try await remote.list("infoCards", filter: f + " && deleted = false").map(InfoCard.init(json:)), keep)
             if isAdmin { invites = (try? await remote.list("invites", filter: f + " && usedBy = ''", sort: "-created").map(Invite.init(json:))) ?? [] }
             feeds = (try? await remote.list("feeds", filter: f).map(Feed.init(json:))) ?? []
             let from = Calendar.current.date(byAdding: .day, value: -45, to: Date())!
             let to = Calendar.current.date(byAdding: .day, value: 400, to: Date())!
             busy = (try? await remote.busy(family: family.id, from: from, to: to)) ?? busy
             lastSync = Date()
-            syncState = outbox.isEmpty ? .idle : .offline
+            syncState = outbox.isEmpty ? (rejected.isEmpty ? .idle : syncState) : .offline
             saveSoon()
         } catch let e as PBError {
-            syncState = e.isOffline ? .offline : .error(e.message)
+            if e.isAuth {
+                if await renewSession() { syncTask = nil; await doSync(); return }
+                needsSignIn = true
+                onSessionExpired?()
+            }
+            syncState = e.isDefinitive || e.isAuth ? .error(e.message) : .offline
         } catch {
-            syncState = .error(error.localizedDescription)
+            syncState = .offline
         }
     }
 
-    /// Server list wins, but keep local records that still have unsent writes.
-    private func merge<T: Identifiable>(_ local: [T], _ server: [T], _ pending: Set<String>) -> [T] where T.ID == String {
+    /// Server list wins, except records with unsent writes or changed since this sync started.
+    private func merge<T: Identifiable>(_ local: [T], _ server: [T], _ keep: (String) -> Bool) -> [T] where T.ID == String {
         var out = server
         let serverIds = Set(server.map(\.id))
-        for l in local where pending.contains(l.id) {
+        for l in local where keep(l.id) {
             if let i = out.firstIndex(where: { $0.id == l.id }) { out[i] = l } else if !serverIds.contains(l.id) { out.append(l) }
         }
         return out
@@ -259,10 +416,16 @@ final class FamilyStore {
             guard let self else { return }
             let coll = String(topic.split(separator: "/").first ?? "")
             guard record.s("family").isEmpty || record.s("family") == self.family.id || coll == "families" else { return }
-            if action == "delete" { self.remove(id: record.s("id"), collection: coll) } else { self.apply(record, collection: coll) }
+            self.touched[record.s("id")] = Date()
+            if action == "delete" { self.remove(id: record.s("id"), collection: coll) } else { self.apply(self.withPending(record, collection: coll), collection: coll) }
             if coll == "memberships" || coll == "calendars" || coll == "lists" {
-                // Access may have changed; a full pull is cheap and authoritative.
-                Task { await self.syncNow() }
+                // Access may have changed; one coalesced full pull is cheap and authoritative.
+                self.resyncTask?.cancel()
+                self.resyncTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    guard !Task.isCancelled else { return }
+                    await self?.syncNow()
+                }
             }
             self.saveSoon()
         }, onReconnect: { [weak self] in
@@ -292,10 +455,10 @@ final class FamilyStore {
         var e = e
         e.family = family.id
         if e.tz.isEmpty { e.tz = TimeZone.current.identifier }
-        let isNew = !events.contains { $0.id == e.id }
+        let old = events.first { $0.id == e.id }
         e.updated = Date()
         put(&events, e)
-        enqueue("events", id: e.id, kind: isNew ? .create : .update, body: e.writable)
+        commit("events", id: e.id, old: old?.writable, new: e.writable)
     }
 
     func delete(event e: CalendarEvent) {
@@ -303,6 +466,12 @@ final class FamilyStore {
         cur.deleted = true
         put(&events, cur)
         enqueue("events", id: e.id, kind: .update, body: ["deleted": true])
+        // Occurrences edited on their own belong to the series and go with it.
+        for var child in events where child.recurrenceParent == e.id && !child.deleted {
+            child.deleted = true
+            put(&events, child)
+            enqueue("events", id: child.id, kind: .update, body: ["deleted": true])
+        }
     }
 
     /// Removes one occurrence of a recurring event.
@@ -336,12 +505,42 @@ final class FamilyStore {
         save(event: copy)
     }
 
-    /// Saves an edit for this and following occurrences: splits the series.
+    private func shiftKey(_ key: String, by minutes: Int, allDay: Bool) -> String? {
+        LocalDateTime(iso: key).map { $0.adding(minutes: minutes).key(allDay: allDay) }
+    }
+
+    /// "Save for all events": moves the series by the same wall-clock shift and keeps skipped dates skipped.
+    func saveSeriesEdit(original o: Occurrence, edited: CalendarEvent) {
+        guard let master = events.first(where: { $0.id == o.event.id }) else { save(event: edited); return }
+        let tz = master.timeZone
+        let delta = LocalDateTime(edited.start, in: tz).minuteNumber - LocalDateTime(o.start, in: tz).minuteNumber
+        var out = edited
+        out.id = master.id
+        out.start = LocalDateTime(master.start, in: tz).adding(minutes: delta).toDate(in: tz)
+        out.end = out.start.addingTimeInterval(edited.end.timeIntervalSince(edited.start))
+        out.exdates = master.exdates.compactMap { shiftKey($0, by: delta, allDay: edited.allDay) }
+        save(event: out)
+    }
+
+    /// "Save for future events": ends the old series and starts a new one that keeps the later
+    /// skipped dates and the remaining COUNT.
     func saveFollowingEdit(original o: Occurrence, edited: CalendarEvent) {
-        endSeries(before: o)
+        guard let master = events.first(where: { $0.id == o.event.id }) else { return }
+        let tz = master.timeZone
+        let delta = LocalDateTime(edited.start, in: tz).minuteNumber - LocalDateTime(o.start, in: tz).minuteNumber
         var copy = edited
         copy.id = RecordID.make()
-        copy.exdates = []
+        copy.recurrenceParent = ""
+        copy.exdates = master.exdates.filter { $0 >= o.key }.compactMap { shiftKey($0, by: delta, allDay: edited.allDay) }
+        if let oldCount = RRule(master.rrule)?.count, var newRule = RRule(edited.rrule) {
+            let before = RecurrenceExpander.expand(start: LocalDateTime(master.start, in: tz), durationMinutes: master.durationMinutes,
+                                                   allDay: master.allDay, tz: tz, rrule: master.rrule, exdates: [],
+                                                   rangeStart: master.start, rangeEnd: o.start)
+                .filter { $0.key(allDay: master.allDay) < o.key }.count
+            newRule.count = max(1, oldCount - before)
+            copy.rrule = newRule.string
+        }
+        endSeries(before: o)
         save(event: copy)
     }
 
@@ -359,9 +558,9 @@ final class FamilyStore {
         var t = t
         t.family = family.id
         t.updated = Date()
-        let isNew = !tasks.contains { $0.id == t.id }
+        let old = tasks.first { $0.id == t.id }
         put(&tasks, t)
-        enqueue("tasks", id: t.id, kind: isNew ? .create : .update, body: t.writable)
+        commit("tasks", id: t.id, old: old?.writable, new: t.writable)
     }
 
     func toggle(task t: TaskItem) {
@@ -439,9 +638,9 @@ final class FamilyStore {
         var it = it
         it.family = family.id
         it.updated = Date()
-        let isNew = !grocery.contains { $0.id == it.id }
+        let old = grocery.first { $0.id == it.id }
         put(&grocery, it)
-        enqueue("groceryItems", id: it.id, kind: isNew ? .create : .update, body: it.writable)
+        commit("groceryItems", id: it.id, old: old?.writable, new: it.writable)
     }
 
     func toggle(grocery it: GroceryItem) {
@@ -514,38 +713,43 @@ final class FamilyStore {
     func save(list l: TaskList) {
         var l = l
         l.family = family.id
-        let isNew = !lists.contains { $0.id == l.id }
+        let old = lists.first { $0.id == l.id }
         if isLocal { l.viewers = [userId]; l.editors = [userId] }
         put(&lists, l)
-        enqueue("lists", id: l.id, kind: isNew ? .create : .update, body: l.writable)
+        commit("lists", id: l.id, old: old?.writable, new: l.writable)
     }
 
     func save(calendar c: FamilyCalendar) {
         var c = c
         c.family = family.id
-        let isNew = !calendars.contains { $0.id == c.id }
+        let old = calendars.first { $0.id == c.id }
         if isLocal { c.viewers = [userId]; c.editors = [userId] }
         put(&calendars, c)
-        enqueue("calendars", id: c.id, kind: isNew ? .create : .update, body: c.writable)
+        commit("calendars", id: c.id, old: old?.writable, new: c.writable)
     }
 
     func save(card c: InfoCard) {
         var c = c
         c.family = family.id
-        let isNew = !infoCards.contains { $0.id == c.id }
+        let old = infoCards.first { $0.id == c.id }
         if isLocal { c.viewers = [userId]; c.editors = [userId] }
         put(&infoCards, c)
-        enqueue("infoCards", id: c.id, kind: isNew ? .create : .update, body: c.writable)
+        commit("infoCards", id: c.id, old: old?.writable, new: c.writable)
     }
 
     func save(member m: Member) {
-        let isNew = !members.contains { $0.id == m.id }
+        let old = members.first { $0.id == m.id }
+        let canSetRole = old == nil || (isAdmin && m.user != userId)
+        func body(_ x: Member) -> JSON {
+            var b: JSON = ["name": x.name, "color": x.color, "emoji": x.emoji, "birthday": PBDate.string(x.birthday),
+                           "notifyAll": x.notifyAll, "sortOrder": x.sortOrder]
+            if canSetRole { b["role"] = x.role.rawValue }
+            return b
+        }
         put(&members, m)
-        var body: JSON = ["name": m.name, "color": m.color, "emoji": m.emoji, "birthday": PBDate.string(m.birthday),
-                          "notifyAll": m.notifyAll, "sortOrder": m.sortOrder]
-        if isNew { body["family"] = family.id; body["role"] = m.role.rawValue }
-        else if isAdmin && m.user != userId { body["role"] = m.role.rawValue }
-        enqueue("memberships", id: m.id, kind: isNew ? .create : .update, body: body)
+        var new = body(m)
+        if old == nil { new["family"] = family.id }
+        commit("memberships", id: m.id, old: old.map(body), new: new)
     }
 
     func remove(member m: Member) {

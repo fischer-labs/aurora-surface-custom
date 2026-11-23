@@ -17,8 +17,10 @@ enum IntentBridge {
         return store
     }
 
-    /// Gives the outbox a moment to reach the server before the app is suspended.
+    /// Writes the change to disk right away (the app may be suspended any moment), then
+    /// gives the outbox a moment to reach the server.
     static func finish(_ store: FamilyStore) async {
+        store.snapshot.write()
         await store.flush()
         store.saveSoon()
     }
@@ -45,8 +47,8 @@ struct AddGroceriesIntent: AppIntent {
         guard let list = store.groceryLists.first(where: store.canEdit) else {
             throw IntentError.message("You don't have a grocery list you can edit.")
         }
-        // "milk, eggs and bread" → separate lines
-        let text = items.replacingOccurrences(of: " and ", with: ", ", options: .caseInsensitive)
+        // "milk, eggs and bread" → separate lines, but "half and half" stays one item.
+        let text = GroceryParser.splitSpokenList(items)
         let before = Set(store.grocery.map(\.id))
         store.addGroceries(text, list: list.id)
         let added = store.grocery.filter { !before.contains($0.id) }.map(\.name)

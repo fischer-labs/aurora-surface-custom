@@ -55,10 +55,13 @@ struct CalItem: Identifiable, Hashable {
         }
         if prefs.showTasks {
             let cal = Calendar.current
-            for t in store.tasks where !t.deleted && !t.completed {
+            let liveLists = store.liveListIds
+            let familyTZ = TimeZone(identifier: store.family.timezone) ?? .current
+            for t in store.tasks where !t.deleted && !t.completed && liveLists.contains(t.list) {
                 guard let d = t.dueLocal else { continue }
                 if !prefs.people.isEmpty && !t.assignees.contains(where: { prefs.people.contains($0) }) { continue }
-                let start = d.toDate(in: .current)
+                // Due times are in the family's time zone; due dates are floating.
+                let start = d.toDate(in: t.dueHasTime ? familyTZ : .current)
                 let dayStart = cal.startOfDay(for: start)
                 guard start < to && (t.dueHasTime ? start : dayStart.addingTimeInterval(86400)) > from else { continue }
                 let color = t.assignees.first.flatMap(store.member).map { Palette.named($0.color).color } ?? Color.roostInk3

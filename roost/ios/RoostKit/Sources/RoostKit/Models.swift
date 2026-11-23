@@ -415,19 +415,21 @@ public struct Occurrence: Identifiable, Hashable, Sendable {
     public var key: String
     public var id: String { event.id + "|" + key }
 
-    /// Expands events into occurrences overlapping [from, to).
-    public static func expand(_ events: [CalendarEvent], from: Date, to: Date) -> [Occurrence] {
+    /// Expands events into occurrences overlapping [from, to). All-day events
+    /// are floating dates: Dec 4 stays Dec 4 for a viewer in another time zone.
+    public static func expand(_ events: [CalendarEvent], from: Date, to: Date, viewer: TimeZone = .current) -> [Occurrence] {
         var out: [Occurrence] = []
         for e in events where !e.deleted {
             let tz = e.timeZone
+            let viewTz = e.allDay ? viewer : tz
             let startLocal = LocalDateTime(e.start, in: tz)
             let dur = e.durationMinutes
-            let starts = RecurrenceExpander.expand(start: startLocal, durationMinutes: dur, allDay: e.allDay, tz: tz,
+            let starts = RecurrenceExpander.expand(start: startLocal, durationMinutes: dur, allDay: e.allDay, tz: viewTz,
                                                    rrule: e.rrule.isEmpty ? nil : e.rrule, exdates: Set(e.exdates),
                                                    rangeStart: from, rangeEnd: to)
             for s in starts {
-                let sd = s.toDate(in: tz)
-                let ed = e.allDay ? s.adding(minutes: dur).toDate(in: tz) : sd.addingTimeInterval(TimeInterval(dur * 60))
+                let sd = s.toDate(in: viewTz)
+                let ed = e.allDay ? s.adding(minutes: dur).toDate(in: viewTz) : sd.addingTimeInterval(TimeInterval(dur * 60))
                 out.append(Occurrence(event: e, start: sd, end: ed, key: s.key(allDay: e.allDay)))
             }
         }

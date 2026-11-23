@@ -16,6 +16,9 @@ public struct PBError: Error, LocalizedError, Sendable {
     }
     public var isOffline: Bool { status == 0 }
     public var isAuth: Bool { status == 401 }
+    /// The server understood and refused (validation, permissions, gone): retrying won't help.
+    /// Everything else (offline, 408/429, 5xx from a proxy or a rebooting server) is retried.
+    public var isDefinitive: Bool { [400, 403, 404, 413, 422].contains(status) }
 }
 
 /// Minimal async PocketBase REST client (no third-party SDK).
@@ -54,7 +57,12 @@ public final class PocketBaseClient: @unchecked Sendable {
             throw PBError(status: 0, message: "Can't reach your Roost server. Changes are saved and will sync.", fieldErrors: [:])
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let obj: Any = data.isEmpty ? [:] as JSON : ((try? JSONSerialization.jsonObject(with: data)) ?? [:] as JSON)
+        let parsed = data.isEmpty ? nil : try? JSONSerialization.jsonObject(with: data)
+        // A 200 that isn't JSON is a captive portal or an access-login page, not our server.
+        if (200..<300).contains(status), !data.isEmpty, parsed == nil {
+            throw PBError(status: 0, message: "Your network returned a login page instead of Roost. Changes are saved and will sync.", fieldErrors: [:])
+        }
+        let obj: Any = parsed ?? [:] as JSON
         guard (200..<300).contains(status) else {
             let j = obj as? JSON ?? [:]
             var fields: [String: String] = [:]

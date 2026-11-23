@@ -170,7 +170,8 @@ struct EventEditor: View {
     private func composedRRule() -> String {
         var base = preset == .custom ? event.rrule : preset.rrule(for: event.start)
         guard !base.isEmpty, var r = RRule(base) else { return "" }
-        r.count = nil
+        // Keep "N times" unless an end date was chosen instead.
+        r.count = repeatEnd == nil ? RRule(event.rrule)?.count : nil
         r.until = repeatEnd.map { .date(LocalDateTime($0, in: .current).date) }
         base = r.string
         return base
@@ -185,21 +186,15 @@ struct EventEditor: View {
             e.start = cal.startOfDay(for: e.start)
             let endDay = cal.startOfDay(for: e.end)
             e.end = endDay > e.start ? endDay : cal.date(byAdding: .day, value: 1, to: e.start)!
+            // Midnight was built in this device's zone, so the date must be read in it too.
+            e.tz = TimeZone.current.identifier
         }
         if e.end < e.start { e.end = e.start.addingTimeInterval(3600) }
         if let o = occurrence {
             switch scope {
             case .one: store.saveOccurrenceEdit(original: o, edited: e)
             case .following: store.saveFollowingEdit(original: o, edited: e)
-            case .all:
-                // Apply time-of-day changes to the master while keeping its first date.
-                if let master = store.events.first(where: { $0.id == o.event.id }) {
-                    let shift = e.start.timeIntervalSince(o.start)
-                    e.start = master.start.addingTimeInterval(shift)
-                    e.end = e.start.addingTimeInterval(event.end.timeIntervalSince(event.start))
-                    e.exdates = master.exdates
-                }
-                store.save(event: e)
+            case .all: store.saveSeriesEdit(original: o, edited: e)
             }
         } else {
             store.save(event: e)

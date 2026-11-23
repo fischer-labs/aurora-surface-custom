@@ -80,7 +80,28 @@ struct Snapshot {
         try? data.write(to: Snapshot.url(familyId: family.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
-    static func delete(familyId: String) { try? FileManager.default.removeItem(at: url(familyId: familyId)) }
+    static func delete(familyId: String) {
+        try? FileManager.default.removeItem(at: url(familyId: familyId))
+        try? FileManager.default.removeItem(at: outboxURL(familyId: familyId))
+    }
+
+    // Unsent changes are small and precious: written on every change, apart from the big snapshot.
+    static func outboxURL(familyId: String) -> URL {
+        url(familyId: familyId).deletingLastPathComponent().appendingPathComponent("outbox-\(familyId).json")
+    }
+
+    static func writeOutbox(familyId: String, user: String, ops: [OutboxOp]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: ["user": user, "ops": ops.map(\.json)] as JSON) else { return }
+        try? data.write(to: outboxURL(familyId: familyId), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    /// The saved outbox, only if it belongs to `user` (never replay someone else's changes).
+    static func loadOutbox(familyId: String, user: String) -> [OutboxOp]? {
+        guard let data = try? Data(contentsOf: outboxURL(familyId: familyId)),
+              let j = try? JSONSerialization.jsonObject(with: data) as? JSON else { return nil }
+        guard j.s("user") == user else { return [] }
+        return (j["ops"] as? [JSON] ?? []).compactMap(OutboxOp.init(json:))
+    }
 }
 
 /// A pending write, replayed in order when the server is reachable.

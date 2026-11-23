@@ -72,7 +72,9 @@ final class AppModel {
         if let famId = UserDefaults.standard.string(forKey: "familyId"), let uid = UserDefaults.standard.string(forKey: "userId"),
            let snap = Snapshot.load(familyId: famId) {
             user = UserProfile(json: ["id": uid, "name": UserDefaults.standard.string(forKey: "userName") ?? ""])
-            store = FamilyStore(snapshot: snap, userId: uid, remote: pb)
+            let s = FamilyStore(snapshot: snap, userId: uid, remote: pb)
+            wire(s)
+            store = s
             phase = .ready
             Task { await refreshSession() }
             return
@@ -80,11 +82,14 @@ final class AppModel {
         await refreshSession()
     }
 
+    @ObservationIgnored private var lastAuthRefresh = Date.distantPast
+
     /// Re-validates the token and (re)opens the family.
     func refreshSession() async {
         guard let pb = client else { phase = .onboarding; return }
         do {
             let profile = try await pb.authRefresh()
+            lastAuthRefresh = Date()
             Keychain.set("token", pb.token ?? "")
             user = profile
             remember(profile)
@@ -92,10 +97,44 @@ final class AppModel {
             await store?.syncNow()
             store?.startRealtime()
         } catch let e as PBError where e.isAuth {
-            signOut()
+            expireSession()
         } catch {
             if store == nil { phase = .onboarding; banner = (error as? PBError)?.message ?? error.localizedDescription }
         }
+    }
+
+    /// Back in the foreground: renew the login now and then (tokens last days, phones stay
+    /// suspended for weeks), otherwise just sync.
+    func becameActive() async {
+        guard let store, !store.isLocal else { return }
+        if Date().timeIntervalSince(lastAuthRefresh) > 6 * 3600 { await refreshSession() } else { await store.syncNow() }
+    }
+
+    /// The login expired: ask to sign in again but keep the cached family and unsent changes,
+    /// which are sent once the same person is back.
+    func expireSession() {
+        let pending = store?.outbox.count ?? 0
+        store?.saveSoon()
+        store?.snapshot.write()
+        store?.stopRealtime()
+        Keychain.delete("token")
+        store = nil
+        client = nil
+        phase = .onboarding
+        banner = pending > 0
+            ? "Your sign-in expired. Sign in again — \(pending) unsent change\(pending == 1 ? " is" : "s are") saved on this phone."
+            : "Your sign-in expired. Please sign in again."
+    }
+
+    /// Someone removed us from the family: forget everything cached about it.
+    func leaveFamily() {
+        store?.stopRealtime()
+        if let famId = UserDefaults.standard.string(forKey: "familyId") { Snapshot.delete(familyId: famId) }
+        UserDefaults.standard.removeObject(forKey: "familyId")
+        ReminderScheduler.shared.clearAll()
+        store = nil
+        phase = .onboarding
+        banner = "You're no longer part of that family on Roost."
     }
 
     private func remember(_ u: UserProfile) {
@@ -112,10 +151,17 @@ final class AppModel {
 
     private func open(family: Family, pb: PocketBaseClient, userId: String) {
         UserDefaults.standard.set(family.id, forKey: "familyId")
-        let snap = Snapshot.load(familyId: family.id) ?? Snapshot(family: family)
+        var snap = Snapshot.load(familyId: family.id) ?? Snapshot(family: family)
+        if UserDefaults.standard.string(forKey: "userId").map({ $0 != userId }) ?? false { snap.outbox = [] }
         let s = FamilyStore(snapshot: snap, userId: userId, remote: pb)
+        wire(s)
         store = s
         phase = .ready
+    }
+
+    private func wire(_ s: FamilyStore) {
+        s.onRemovedFromFamily = { [weak self] in self?.leaveFamily() }
+        s.onSessionExpired = { [weak self] in self?.expireSession() }
     }
 
     // MARK: Onboarding actions
@@ -137,9 +183,16 @@ final class AppModel {
         let (token, profile) = try await pb.authWithPassword(email: email, password: password)
         Keychain.set("token", token)
         client = pb
+        lastAuthRefresh = Date()
+        // A different person on this phone never replays someone else's unsent changes.
+        if let prev = UserDefaults.standard.string(forKey: "userId"), prev != profile.id,
+           let famId = UserDefaults.standard.string(forKey: "familyId") {
+            Snapshot.writeOutbox(familyId: famId, user: profile.id, ops: [])
+        }
         user = profile
         remember(profile)
         localOnly = false
+        banner = nil
     }
 
     func signIn(email: String, password: String) async throws {

@@ -17,8 +17,8 @@ struct RoostApp: App {
                 .task { await app.bootstrap() }
                 .onOpenURL { app.handle(url: $0) }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active, let store = app.store {
-                        Task { await store.syncNow() }
+                    if phase == .active, app.store != nil {
+                        Task { await app.becameActive() }
                         DeviceCalendars.shared.reload()
                     }
                     if phase == .background { BackgroundRefresh.schedule() }
