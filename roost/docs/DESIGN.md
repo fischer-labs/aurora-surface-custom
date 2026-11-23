@@ -75,7 +75,7 @@ Levels: `none` < `busy` (calendars only: sees time blocks, no details) < `view` 
 | Kind default | owner | parent | caregiver | relative | kid |
 |---|---|---|---|---|---|
 | Calendar: family | edit | edit | edit | view | view |
-| Calendar: personal | edit | view | busy | none | none |
+| Calendar: personal | view | view | busy | none | none |
 | Calendar: subscription (ICS) | view | view | view | view | view |
 | List: todo | edit | edit | none | none | none |
 | List: grocery | edit | edit | edit | none | edit |

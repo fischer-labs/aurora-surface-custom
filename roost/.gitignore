@@ -1,0 +1,14 @@
+# Roost build outputs
+server/roost-server
+server/pb_data/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+ios/build/
+ios/DerivedData/
+ios/RoostKit/.build/
+ios/RoostKit/.swiftpm/
+*.xcuserstate
+xcuserdata/
+.env

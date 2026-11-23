@@ -53,7 +53,7 @@
    "membershipId": "m1",
    "sharing": {},
    "isOwner": false,
-   "expected": "edit"
+   "expected": "view"
   },
   {
    "resource": "calendar",
