@@ -41,6 +41,12 @@ final class AppModel {
     // MARK: Launch
 
     func bootstrap() async {
+        // `-RoostDemo 1` (launch argument): a realistic sample family, on device only.
+        if UserDefaults.standard.bool(forKey: "RoostDemo") {
+            store = FamilyStore(snapshot: LocalSeed.demo(), userId: LocalSeed.userId, remote: nil)
+            phase = .ready
+            return
+        }
         if localOnly, let snap = Snapshot.load(familyId: LocalSeed.familyId) {
             store = FamilyStore(snapshot: snap, userId: LocalSeed.userId, remote: nil)
             phase = .ready

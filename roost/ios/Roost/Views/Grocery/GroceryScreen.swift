@@ -153,7 +153,7 @@ struct GroceryScreen: View {
     private func add(_ list: TaskList) {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        withAnimation(.snappy) { store.addGroceries(text, list: list.id) }
+        withAnimation(.snappy) { _ = store.addGroceries(text, list: list.id) }
         input = ""
         focused = true
     }

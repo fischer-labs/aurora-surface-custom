@@ -43,6 +43,52 @@ jobs:
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning: .*(deprecated|never)|BUILD (SUCCEEDED|FAILED)" | head -200
 
+      - name: Simulator screenshots (demo family)
+        working-directory: roost/ios
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = [d for k, v in json.load(sys.stdin)["devices"].items() if "iOS" in k for d in v]
+          pick = [d for d in devs if d["name"].startswith("iPhone") and "Pro" in d["name"] and "Max" not in d["name"]] or [d for d in devs if d["name"].startswith("iPhone")]
+          print(pick[-1]["udid"])')
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP=build/DerivedData/Build/Products/Debug-iphonesimulator/Roost.app
+          BID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          mkdir -p shots
+          shoot() { # name, extra launch args...
+            local name=$1; shift
+            xcrun simctl launch --terminate-running-process "$UDID" "$BID" -RoostDemo 1 "$@" >/dev/null
+            sleep 7
+            xcrun simctl io "$UDID" screenshot "shots/$name.png" >/dev/null
+          }
+          xcrun simctl launch --terminate-running-process "$UDID" "$BID" -RoostDemo 0 >/dev/null; sleep 6
+          xcrun simctl io "$UDID" screenshot shots/00-welcome.png >/dev/null
+          shoot 01-today -tab today
+          shoot 02-calendar-month -tab calendar -cal.mode month
+          shoot 03-calendar-week -tab calendar -cal.mode week
+          shoot 04-calendar-people -tab calendar -cal.mode people
+          shoot 05-calendar-agenda -tab calendar -cal.mode agenda
+          shoot 06-todos -tab lists
+          shoot 07-groceries -tab grocery
+          shoot 08-family -tab more
+          xcrun simctl ui "$UDID" appearance dark
+          shoot 09-today-dark -tab today
+          shoot 10-groceries-dark -tab grocery
+          ls -la shots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roost-ios-screenshots
+          path: roost/ios/shots
+          retention-days: 14
+
       - name: Upload generated project and log
         if: always()
         uses: actions/upload-artifact@v4
