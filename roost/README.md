@@ -51,16 +51,17 @@ roost/
 ```bash
 # Server (Go 1.27)
 cd server && go test ./...            # role-by-role HTTP integration tests, ICS, web serving
-go run . serve                        # http://127.0.0.1:8090
+go run . serve                        # http://127.0.0.1:8090 (prints the first-account setup code)
 
 # Web (Node 22)
-cd web && npm ci && npm test          # 247 fixture tests
+cd web && npm ci && npm test          # 255 tests: shared fixtures, outbox races, series edits
 ROOST_API=http://127.0.0.1:8090 npm run dev
-tests/run-e2e.sh                      # builds everything, drives owner/nanny/grandma flows in Chromium
+tests/run-e2e.sh                      # builds everything, drives owner/nanny/grandma/MCP flows in Chromium
 
 # RoostKit (Swift 6, Linux or macOS)
 cd ios/RoostKit && swift test
-ROOST_TEST_SERVER=http://127.0.0.1:8090 swift test   # + live round-trip against a fresh server
+ROOST_TEST_SERVER=http://127.0.0.1:8099 swift test   # + live round-trip against a fresh server
+                                      #   started with ROOST_SETUP_CODE=off ROOST_RATE_LIMIT=off
 
 # iOS app (macOS + Xcode 26)
 cd ios && xcodegen && open Roost.xcodeproj
