@@ -573,6 +573,16 @@ export async function ensureFeed(): Promise<FeedRec> {
   put('feeds', rec);
   return rec;
 }
+// ---- AI assistant (MCP) keys: per person, not synced, secret shown once ----
+export interface AgentKey { id: string; name: string; hint: string; lastUsedAt: string; created: string }
+export const mcpURL = `${apiBase}/api/roost/mcp`;
+export async function listAgentKeys(): Promise<AgentKey[]> {
+  return pb.collection('agentKeys').getFullList<AgentKey>({ sort: '-created', filter: pb.filter('user = {:u}', { u: state.user?.id ?? '' }) });
+}
+export async function createAgentKey(name: string): Promise<AgentKey & { token: string }> {
+  return pb.send('/api/roost/agent-keys', { method: 'POST', body: { family: state.family!.id, name } });
+}
+export async function revokeAgentKey(id: string) { await pb.collection('agentKeys').delete(id); }
 export const feedURL = (f: FeedRec) => `${apiBase}/api/roost/ics/${f.token}.ics`;
 export async function refreshSubscription(c: CalendarRec): Promise<string | null> {
   try {

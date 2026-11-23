@@ -386,7 +386,9 @@ func (c *mcpCtx) resolvePeople(names []string) ([]string, error) {
 	return ids, nil
 }
 
-func (c *mcpCtx) can(r *core.Record, field string) bool { return contains(r.GetStringSlice(field), c.user.Id) }
+func (c *mcpCtx) can(r *core.Record, field string) bool {
+	return contains(r.GetStringSlice(field), c.user.Id)
+}
 
 func (c *mcpCtx) findByName(coll, name string, pick func(*core.Record) bool) (*core.Record, error) {
 	var candidates []*core.Record

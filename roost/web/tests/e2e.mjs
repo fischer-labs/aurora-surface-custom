@@ -241,6 +241,30 @@ try {
   await np.getByText('Birthday candles').waitFor({ timeout: 8000 });
   log('realtime update reached the nanny’s phone');
 
+  // ---------------------------------------------------------------- an AI assistant (MCP) adds groceries with the owner's key
+  await page.getByRole('link', { name: 'Family' }).first().click();
+  await page.getByRole('link', { name: /Settings/ }).click();
+  await page.getByPlaceholder('Name it, e.g. Claude on my Mac').fill('Claude on my Mac');
+  await page.getByRole('button', { name: 'New key' }).click();
+  const agentKey = (await page.locator('.secret').innerText()).trim();
+  assert.match(agentKey, /^rk_[a-z0-9]{40,}$/);
+  await page.getByText('Claude on my Mac').waitFor();
+  await page.locator('.snippet').scrollIntoViewIfNeeded();
+  await shot(page, '16-settings-assistants');
+  const mcp = async (method, params) => {
+    const r = await fetch(ORIGIN + '/api/roost/mcp', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: 'Bearer ' + agentKey },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+    assert.equal(r.status, 200, `mcp ${method}`);
+    return (await r.json()).result;
+  };
+  assert.equal((await mcp('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } })).serverInfo.name, 'roost');
+  const added = await mcp('tools/call', { name: 'add_groceries', arguments: { items: ['sunscreen', '2 lb ground beef'] } });
+  assert.ok(!added.isError, JSON.stringify(added));
+  await np.getByText('Sunscreen').waitFor({ timeout: 8000 });
+  const week = await mcp('tools/call', { name: 'list_events', arguments: { days: 7 } });
+  assert.ok(week.structuredContent.events.some((e) => e.title === 'Soccer practice'), 'MCP sees the expanded recurring event');
+  log('an MCP assistant added groceries; they reached the nanny’s phone live');
+
   // ---------------------------------------------------------------- phone + dark mode screenshots for the owner
   const octx = await browser.newContext({ ...phone, colorScheme: 'dark' });
   const op = await octx.newPage();

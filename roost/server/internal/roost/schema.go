@@ -20,7 +20,7 @@ var Roles = []string{RoleOwner, RoleParent, RoleCaregiver, RoleRelative, RoleKid
 // shareable records, members/admins on families) keep these short; see
 // docs/DESIGN.md §3.3.
 const (
-	ruleAuthed      = `@request.auth.id != ""`
+	ruleAuthed       = `@request.auth.id != ""`
 	ruleFamilyMember = `family.members.id ?= @request.auth.id`
 	ruleFamilyAdmin  = `family.admins.id ?= @request.auth.id`
 )

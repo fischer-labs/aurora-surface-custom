@@ -324,3 +324,8 @@ textarea.input { resize: vertical; min-height: 80px; }
   .hello h1 { font-size: 26px; }
   .fab-mobile { position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 25; border-radius: 999px; padding: 12px 18px; box-shadow: var(--shadow-lg); }
 }
+
+/* AI assistant keys */
+.callout { background: var(--accent-soft); border-radius: 12px; padding: 12px; }
+.secret { font: 600 13px var(--mono); word-break: break-all; user-select: all; color: var(--ink); }
+.snippet { margin: 0; padding: 12px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); font: 12px/1.5 var(--mono); color: var(--ink2); white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }

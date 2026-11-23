@@ -51,11 +51,11 @@ func dateFromDayNumber(z0 int) localDate {
 	return localDate{y, m, d}
 }
 
-func (d localDate) weekday() int    { return ((d.dayNumber()%7)+11)%7 }
-func (d localDate) add(n int) localDate { return dateFromDayNumber(d.dayNumber() + n) }
+func (d localDate) weekday() int          { return ((d.dayNumber() % 7) + 11) % 7 }
+func (d localDate) add(n int) localDate   { return dateFromDayNumber(d.dayNumber() + n) }
 func (d localDate) less(o localDate) bool { return d.dayNumber() < o.dayNumber() }
 
-func daysIn(y, m int) int { return time.Date(y, time.Month(m)+1, 0, 0, 0, 0, 0, time.UTC).Day() }
+func daysIn(y, m int) int        { return time.Date(y, time.Month(m)+1, 0, 0, 0, 0, 0, time.UTC).Day() }
 func validDate(y, m, d int) bool { return m >= 1 && m <= 12 && d >= 1 && d <= daysIn(y, m) }
 
 type localDT struct {

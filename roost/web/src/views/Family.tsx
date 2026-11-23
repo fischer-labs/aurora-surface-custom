@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import {
-  Bell, CalendarClock, Clock, Copy, GraduationCap, HeartPulse, House, Link2, LogOut, Mail, MapPin, Phone, Pin, Plus, RefreshCw, Settings,
+  Bell, Bot, CalendarClock, Clock, Copy, GraduationCap, HeartPulse, House, Link2, LogOut, Mail, MapPin, Phone, Pin, Plus, RefreshCw, Settings,
   StickyNote, Trash2, UserPlus, Users, type LucideIcon,
 } from 'lucide-react';
 import {
-  canManageCalendar, createInvite, enableNotifications, ensureFeed, feedURL, isAdmin, liveCalendars, liveCards, me, member, myRole,
-  refreshSubscription, removeMember, saveCalendar, saveCard, saveMember, signOut, sortedMembers, syncNow, useRoost,
+  canManageCalendar, createAgentKey, createInvite, enableNotifications, ensureFeed, feedURL, isAdmin, liveCalendars, liveCards, me, member, myRole,
+  listAgentKeys, mcpURL, refreshSubscription, removeMember, revokeAgentKey, saveCalendar, saveCard, saveMember, signOut, sortedMembers, syncNow, useRoost, type AgentKey,
 } from '../data/store';
 import { COLORS, newId, pbDate, type CalendarRec, type CardRec, type InviteRec, type Member } from '../data/models';
 import { LEVEL_LABEL, ROLES, ROLE_BLURB, ROLE_LABEL, defaultLevel, type Level, type Role, type Sharing } from '../core/logic';
@@ -510,6 +510,7 @@ function SettingsPane() {
           </select>
         </Field>
       </div>
+      {myRole(s) !== 'kid' && <AssistantsCard />}
       <div className="card stack">
         <b>Account</b>
         <div className="muted small">Signed in as {s.user?.name || s.user?.email}{s.lastSync && ` · last synced ${new Date(s.lastSync).toLocaleTimeString()}`}{s.outbox.length > 0 && ` · ${s.outbox.length} change(s) waiting`}</div>
@@ -519,6 +520,75 @@ function SettingsPane() {
         </div>
       </div>
       <p className="faint small">Roost is private to your family. Your data lives on your own server.</p>
+    </div>
+  );
+}
+
+/** Connect an AI assistant (Claude, a local-model agent…) over MCP with this person's access. */
+function AssistantsCard() {
+  const [keys, setKeys] = useState<AgentKey[] | null>(null);
+  const [name, setName] = useState('');
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [client, setClient] = useState<'code' | 'desktop' | 'other'>('code');
+  const [err, setErr] = useState<string | null>(null);
+  const [toast, show] = useToast();
+  const load = () => listAgentKeys().then(setKeys).catch(() => setKeys([]));
+  useEffect(() => { void load(); }, []);
+  const create = async () => {
+    setErr(null);
+    try { const k = await createAgentKey(name.trim() || 'AI assistant'); setFresh(k.token); setName(''); void load(); }
+    catch (e) { setErr(errorText(e)); }
+  };
+  const key = fresh ?? 'rk_…';
+  const snippet = client === 'code'
+    ? `claude mcp add --transport http roost ${mcpURL} \\\n  --header "Authorization: Bearer ${key}"`
+    : client === 'desktop'
+      ? JSON.stringify({ mcpServers: { roost: { command: 'npx', args: ['-y', 'mcp-remote', mcpURL, '--header', 'Authorization:${ROOST_KEY}'], env: { ROOST_KEY: `Bearer ${key}` } } } }, null, 2)
+      : `URL:     ${mcpURL}\nTransport: Streamable HTTP (JSON responses)\nHeader:  Authorization: Bearer ${key}`;
+  return (
+    <div className="card stack">
+      <b className="row"><Bot size={16} /> AI assistants</b>
+      <span className="muted small">
+        Let an assistant such as Claude or an agent on your home lab read the calendar and add events, to-dos and groceries for you.
+        It gets exactly your access — nothing more — and you can revoke it anytime.
+      </span>
+      {keys && keys.length > 0 && (
+        <div className="stack" style={{ gap: 6 }}>
+          {keys.map((k) => (
+            <div key={k.id} className="row" style={{ justifyContent: 'space-between' }}>
+              <span><b>{k.name}</b> <span className="faint small">…{k.hint} · {k.lastUsedAt ? `last used ${new Date(k.lastUsedAt.replace(' ', 'T')).toLocaleDateString()}` : 'never used'}</span></span>
+              <button className="btn sm ghost danger" aria-label={`Revoke ${k.name}`}
+                onClick={async () => { if (confirm(`Revoke “${k.name}”? It stops working immediately.`)) { await revokeAgentKey(k.id); void load(); } }}>
+                <Trash2 size={14} /> Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {fresh ? (
+        <div className="callout stack">
+          <b className="small">Copy this key now — it won't be shown again.</b>
+          <code className="secret">{fresh}</code>
+        </div>
+      ) : (
+        <div className="row">
+          <input className="input" placeholder="Name it, e.g. Claude on my Mac" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} />
+          <button className="btn" onClick={() => void create()}><Plus size={16} /> New key</button>
+        </div>
+      )}
+      {err && <div className="err">{err}</div>}
+      <Field label="Set up">
+        <select className="input" value={client} onChange={(e) => setClient(e.target.value as typeof client)} aria-label="Assistant">
+          <option value="code">Claude Code</option><option value="desktop">Claude Desktop (via mcp-remote)</option><option value="other">Any MCP client</option>
+        </select>
+      </Field>
+      <pre className="snippet">{snippet}</pre>
+      <div className="row">
+        <button className="btn sm" onClick={() => void navigator.clipboard?.writeText(snippet).then(() => show('Copied'))}><Copy size={14} /> Copy</button>
+        {fresh && <button className="btn sm ghost" onClick={() => setFresh(null)}>Done</button>}
+      </div>
+      <span className="faint small">Tools: family overview, events (list/add), to-dos (list/add/complete), groceries (list/add/check off).</span>
+      {toast}
     </div>
   );
 }
