@@ -1,0 +1,883 @@
+{
+ "_comment": "Quick-add acceptance cases. now/tz apply to every case. See shared/README.md \u00a74.",
+ "now": "2026-11-23T09:00",
+ "tz": "America/Chicago",
+ "cases": [
+  {
+   "text": "Dentist Friday 3pm",
+   "mode": "event",
+   "expect": {
+    "title": "Dentist",
+    "date": "2026-11-27",
+    "time": "15:00",
+    "endDate": "2026-11-27",
+    "endTime": "16:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Soccer practice every Tue 4-5:30pm @Emma driver:Dad remind 30m",
+   "mode": "event",
+   "expect": {
+    "title": "Soccer practice",
+    "date": "2026-11-24",
+    "time": "16:00",
+    "endDate": "2026-11-24",
+    "endTime": "17:30",
+    "allDay": false,
+    "rrule": "FREQ=WEEKLY;BYDAY=TU",
+    "mentions": [
+     "Emma"
+    ],
+    "driver": "Dad",
+    "tag": null,
+    "priority": 0,
+    "reminders": [
+     30
+    ]
+   }
+  },
+  {
+   "text": "Call pediatrician tomorrow 9am @Me !! #Household",
+   "mode": "task",
+   "expect": {
+    "title": "Call pediatrician",
+    "date": "2026-11-24",
+    "time": "09:00",
+    "endDate": null,
+    "endTime": null,
+    "allDay": false,
+    "rrule": null,
+    "mentions": [
+     "Me"
+    ],
+    "driver": null,
+    "tag": "Household",
+    "priority": 2,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Grandma's birthday dec 3",
+   "mode": "event",
+   "expect": {
+    "title": "Grandma's birthday",
+    "date": "2026-12-03",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Piano lesson next friday at 5",
+   "mode": "event",
+   "expect": {
+    "title": "Piano lesson",
+    "date": "2026-12-04",
+    "time": "17:00",
+    "endDate": "2026-12-04",
+    "endTime": "18:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Dinner with the Smiths tonight",
+   "mode": "event",
+   "expect": {
+    "title": "Dinner with the Smiths",
+    "date": "2026-11-23",
+    "time": "18:00",
+    "endDate": "2026-11-23",
+    "endTime": "19:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Take out trash every weekday",
+   "mode": "task",
+   "expect": {
+    "title": "Take out trash",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Team meeting 10am-2pm",
+   "mode": "event",
+   "expect": {
+    "title": "Team meeting",
+    "date": "2026-11-23",
+    "time": "10:00",
+    "endDate": "2026-11-23",
+    "endTime": "14:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Swim from 3 to 4:30pm on Saturday",
+   "mode": "event",
+   "expect": {
+    "title": "Swim",
+    "date": "2026-11-28",
+    "time": "15:00",
+    "endDate": "2026-11-28",
+    "endTime": "16:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Flight to Denver 12/18 6:45am for 3 hours",
+   "mode": "event",
+   "expect": {
+    "title": "Flight to Denver",
+    "date": "2026-12-18",
+    "time": "06:45",
+    "endDate": "2026-12-18",
+    "endTime": "09:45",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Pay water bill due 12/1 !",
+   "mode": "task",
+   "expect": {
+    "title": "Pay water bill",
+    "date": "2026-12-01",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 1,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Book club every other tuesday 7pm",
+   "mode": "event",
+   "expect": {
+    "title": "Book club",
+    "date": "2026-11-24",
+    "time": "19:00",
+    "endDate": "2026-11-24",
+    "endTime": "20:00",
+    "allDay": false,
+    "rrule": "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Payday every 2 weeks",
+   "mode": "event",
+   "expect": {
+    "title": "Payday",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": "FREQ=WEEKLY;INTERVAL=2",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Yoga every mon, wed and fri at 6am",
+   "mode": "event",
+   "expect": {
+    "title": "Yoga",
+    "date": "2026-11-23",
+    "time": "06:00",
+    "endDate": "2026-11-23",
+    "endTime": "07:00",
+    "allDay": false,
+    "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Parent teacher conference 2026-12-08 4:15pm",
+   "mode": "event",
+   "expect": {
+    "title": "Parent teacher conference",
+    "date": "2026-12-08",
+    "time": "16:15",
+    "endDate": "2026-12-08",
+    "endTime": "17:15",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Haircut in 2 weeks at noon",
+   "mode": "event",
+   "expect": {
+    "title": "Haircut",
+    "date": "2026-12-07",
+    "time": "12:00",
+    "endDate": "2026-12-07",
+    "endTime": "13:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Mow lawn this weekend",
+   "mode": "task",
+   "expect": {
+    "title": "Mow lawn",
+    "date": "2026-11-28",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Vacation planning next week",
+   "mode": "task",
+   "expect": {
+    "title": "Vacation planning",
+    "date": "2026-11-30",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "School holiday party 12/18",
+   "mode": "event",
+   "expect": {
+    "title": "School holiday party",
+    "date": "2026-12-18",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Vet appointment Jan 5 2pm",
+   "mode": "event",
+   "expect": {
+    "title": "Vet appointment",
+    "date": "2027-01-05",
+    "time": "14:00",
+    "endDate": "2027-01-05",
+    "endTime": "15:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Anniversary dinner December 12th 7:30pm remind me 1 day before remind 2h",
+   "mode": "event",
+   "expect": {
+    "title": "Anniversary dinner",
+    "date": "2026-12-12",
+    "time": "19:30",
+    "endDate": "2026-12-12",
+    "endTime": "20:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": [
+     1440,
+     120
+    ]
+   }
+  },
+  {
+   "text": "Gym 5:30 am",
+   "mode": "event",
+   "expect": {
+    "title": "Gym",
+    "date": "2026-11-23",
+    "time": "05:30",
+    "endDate": "2026-11-23",
+    "endTime": "06:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Pick up dry cleaning tmrw",
+   "mode": "task",
+   "expect": {
+    "title": "Pick up dry cleaning",
+    "date": "2026-11-24",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Water plants every 3 days",
+   "mode": "task",
+   "expect": {
+    "title": "Water plants",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": "FREQ=DAILY;INTERVAL=3",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Rent due monthly on 12/1",
+   "mode": "task",
+   "expect": {
+    "title": "Rent",
+    "date": "2026-12-01",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": "FREQ=MONTHLY",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Lunch with Sarah at 12:30",
+   "mode": "event",
+   "expect": {
+    "title": "Lunch with Sarah",
+    "date": "2026-11-23",
+    "time": "12:30",
+    "endDate": "2026-11-23",
+    "endTime": "13:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Recital Sunday 2-4pm",
+   "mode": "event",
+   "expect": {
+    "title": "Recital",
+    "date": "2026-11-29",
+    "time": "14:00",
+    "endDate": "2026-11-29",
+    "endTime": "16:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Late start 11-1pm",
+   "mode": "event",
+   "expect": {
+    "title": "Late start",
+    "date": "2026-11-23",
+    "time": "11:00",
+    "endDate": "2026-11-23",
+    "endTime": "13:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Annual physical every year",
+   "mode": "event",
+   "expect": {
+    "title": "Annual physical",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": "FREQ=YEARLY",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Movie night at 7",
+   "mode": "event",
+   "expect": {
+    "title": "Movie night",
+    "date": "2026-11-23",
+    "time": "19:00",
+    "endDate": "2026-11-23",
+    "endTime": "20:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Breakfast meeting at 8",
+   "mode": "event",
+   "expect": {
+    "title": "Breakfast meeting",
+    "date": "2026-11-23",
+    "time": "08:00",
+    "endDate": "2026-11-23",
+    "endTime": "09:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Emma dentist @Emma @Mom",
+   "mode": "event",
+   "expect": {
+    "title": "Emma dentist",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [
+     "Emma",
+     "Mom"
+    ],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Bake sale #School",
+   "mode": "event",
+   "expect": {
+    "title": "Bake sale",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": "School",
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Trip #Family_Trips",
+   "mode": "event",
+   "expect": {
+    "title": "Trip",
+    "date": "2026-11-23",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": "Family Trips",
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "!high Renew passport",
+   "mode": "task",
+   "expect": {
+    "title": "Renew passport",
+    "date": null,
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 3,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Buy gift",
+   "mode": "task",
+   "expect": {
+    "title": "Buy gift",
+    "date": null,
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Concert 8:00 PM saturday",
+   "mode": "event",
+   "expect": {
+    "title": "Concert",
+    "date": "2026-11-28",
+    "time": "20:00",
+    "endDate": "2026-11-28",
+    "endTime": "21:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Practice weekdays 3:30pm",
+   "mode": "event",
+   "expect": {
+    "title": "Practice",
+    "date": "2026-11-23",
+    "time": "15:30",
+    "endDate": "2026-11-23",
+    "endTime": "16:30",
+    "allDay": false,
+    "rrule": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Drop off car 4/2/27",
+   "mode": "event",
+   "expect": {
+    "title": "Drop off car",
+    "date": "2027-04-02",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Conference call 16:00",
+   "mode": "event",
+   "expect": {
+    "title": "Conference call",
+    "date": "2026-11-23",
+    "time": "16:00",
+    "endDate": "2026-11-23",
+    "endTime": "17:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Book flights in 3 days",
+   "mode": "task",
+   "expect": {
+    "title": "Book flights",
+    "date": "2026-11-26",
+    "time": null,
+    "endDate": null,
+    "endTime": null,
+    "allDay": true,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Doctor on monday 10:30am",
+   "mode": "event",
+   "expect": {
+    "title": "Doctor",
+    "date": "2026-11-23",
+    "time": "10:30",
+    "endDate": "2026-11-23",
+    "endTime": "11:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Spring dentist Mar 10 9am",
+   "mode": "event",
+   "expect": {
+    "title": "Spring dentist",
+    "date": "2027-03-10",
+    "time": "09:00",
+    "endDate": "2027-03-10",
+    "endTime": "10:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Dinner 6:30 p.m. thursday",
+   "mode": "event",
+   "expect": {
+    "title": "Dinner",
+    "date": "2026-11-26",
+    "time": "18:30",
+    "endDate": "2026-11-26",
+    "endTime": "19:30",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Late movie 11pm for 2 hours",
+   "mode": "event",
+   "expect": {
+    "title": "Late movie",
+    "date": "2026-11-23",
+    "time": "23:00",
+    "endDate": "2026-11-24",
+    "endTime": "01:00",
+    "allDay": false,
+    "rrule": null,
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Cub scouts every 1st and 3rd mon 6pm",
+   "mode": "event",
+   "expect": {
+    "title": "Cub scouts",
+    "date": "2026-12-07",
+    "time": "18:00",
+    "endDate": "2026-12-07",
+    "endTime": "19:00",
+    "allDay": false,
+    "rrule": "FREQ=MONTHLY;BYDAY=1MO,3MO",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "Pizza night every last friday 6pm",
+   "mode": "event",
+   "expect": {
+    "title": "Pizza night",
+    "date": "2026-11-27",
+    "time": "18:00",
+    "endDate": "2026-11-27",
+    "endTime": "19:00",
+    "allDay": false,
+    "rrule": "FREQ=MONTHLY;BYDAY=-1FR",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  },
+  {
+   "text": "PTA every first tuesday 7pm",
+   "mode": "event",
+   "expect": {
+    "title": "PTA",
+    "date": "2026-12-01",
+    "time": "19:00",
+    "endDate": "2026-12-01",
+    "endTime": "20:00",
+    "allDay": false,
+    "rrule": "FREQ=MONTHLY;BYDAY=1TU",
+    "mentions": [],
+    "driver": null,
+    "tag": null,
+    "priority": 0,
+    "reminders": []
+   }
+  }
+ ]
+}

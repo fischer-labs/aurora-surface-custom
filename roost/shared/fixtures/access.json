@@ -1,0 +1,435 @@
+{
+ "_comment": "Effective access level cases. See shared/README.md \u00a77 and DESIGN \u00a73.2.",
+ "cases": [
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "busy"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "subscription",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "subscription",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "subscription",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "subscription",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "subscription",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "packing",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "packing",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "packing",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "list",
+   "subkind": "packing",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "packing",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": true,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "personal",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {
+    "roles": {
+     "parent": "busy"
+    }
+   },
+   "isOwner": false,
+   "expected": "busy"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "relative",
+   "membershipId": "m1",
+   "sharing": {
+    "roles": {
+     "relative": "none"
+    },
+    "people": {
+     "m1": "edit"
+    }
+   },
+   "isOwner": false,
+   "expected": "edit"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "relative",
+   "membershipId": "m2",
+   "sharing": {
+    "roles": {
+     "relative": "none"
+    },
+    "people": {
+     "m1": "edit"
+    }
+   },
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "list",
+   "subkind": "todo",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {
+    "people": {
+     "m1": "view"
+    }
+   },
+   "isOwner": false,
+   "expected": "view"
+  },
+  {
+   "resource": "list",
+   "subkind": "grocery",
+   "role": "kid",
+   "membershipId": "m1",
+   "sharing": {
+    "roles": {
+     "kid": "busy"
+    }
+   },
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "info",
+   "subkind": "card",
+   "role": "caregiver",
+   "membershipId": "m1",
+   "sharing": {
+    "roles": {
+     "caregiver": "none"
+    }
+   },
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "unknownkind",
+   "role": "parent",
+   "membershipId": "m1",
+   "sharing": {},
+   "isOwner": false,
+   "expected": "none"
+  },
+  {
+   "resource": "calendar",
+   "subkind": "family",
+   "role": "owner",
+   "membershipId": "m1",
+   "sharing": {
+    "roles": {
+     "owner": "view"
+    }
+   },
+   "isOwner": false,
+   "expected": "view"
+  }
+ ]
+}

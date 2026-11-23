@@ -1,0 +1,257 @@
+{
+ "_comment": "Day layout cases: expected id -> [col, cols]. See shared/README.md \u00a76.",
+ "cases": [
+  {
+   "name": "single",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "two overlapping",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 570,
+     "end": 630
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     2
+    ],
+    "b": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "touching is not overlapping",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 600,
+     "end": 660
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     1
+    ],
+    "b": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "reuse freed column",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 660
+    },
+    {
+     "id": "b",
+     "start": 560,
+     "end": 600
+    },
+    {
+     "id": "c",
+     "start": 600,
+     "end": 640
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     2
+    ],
+    "b": [
+     1,
+     2
+    ],
+    "c": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "two clusters",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 550,
+     "end": 610
+    },
+    {
+     "id": "c",
+     "start": 700,
+     "end": 760
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     2
+    ],
+    "b": [
+     1,
+     2
+    ],
+    "c": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "zero length treated as 15 min",
+   "items": [
+    {
+     "id": "a",
+     "start": 600,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 605,
+     "end": 650
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     2
+    ],
+    "b": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "same start longer first",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 540,
+     "end": 660
+    }
+   ],
+   "expected": {
+    "b": [
+     0,
+     2
+    ],
+    "a": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "chain",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 600
+    },
+    {
+     "id": "b",
+     "start": 590,
+     "end": 650
+    },
+    {
+     "id": "c",
+     "start": 640,
+     "end": 700
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     2
+    ],
+    "b": [
+     1,
+     2
+    ],
+    "c": [
+     0,
+     2
+    ]
+   }
+  },
+  {
+   "name": "three-way",
+   "items": [
+    {
+     "id": "a",
+     "start": 540,
+     "end": 720
+    },
+    {
+     "id": "b",
+     "start": 570,
+     "end": 690
+    },
+    {
+     "id": "c",
+     "start": 600,
+     "end": 660
+    }
+   ],
+   "expected": {
+    "a": [
+     0,
+     3
+    ],
+    "b": [
+     1,
+     3
+    ],
+    "c": [
+     2,
+     3
+    ]
+   }
+  }
+ ]
+}
